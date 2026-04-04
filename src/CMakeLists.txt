@@ -1,5 +1,5 @@
 qt_add_executable(quickshell main.cpp)
-set_target_properties(quickshell PROPERTIES OUTPUT_NAME qs-mcs)
+set_target_properties(quickshell PROPERTIES OUTPUT_NAME mcs-qs)
 
 install(TARGETS quickshell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
