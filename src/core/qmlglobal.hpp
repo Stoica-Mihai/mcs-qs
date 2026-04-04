@@ -271,6 +271,10 @@ public:
 	[[nodiscard]] static QString clipboardText();
 	static void setClipboardText(const QString& text);
 
+	/// Copy an image file to the system clipboard.
+	/// Supports any format Qt can load (PNG, JPG, BMP, etc.).
+	Q_INVOKABLE static bool setClipboardImage(const QString& path);
+
 	[[nodiscard]] QString dataDir() const;
 	[[nodiscard]] QString stateDir() const;
 	[[nodiscard]] QString cacheDir() const;

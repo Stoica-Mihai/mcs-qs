@@ -6,6 +6,7 @@
 #include <qcoreapplication.h>
 #include <qdir.h>
 #include <qguiapplication.h>
+#include <qimage.h>
 #include <qicon.h>
 #include <qjsengine.h>
 #include <qlist.h>
@@ -224,6 +225,15 @@ void QuickshellGlobal::setClipboardText(const QString& text) {
 	return static_cast<QGuiApplication*>(QGuiApplication::instance()) // NOLINT
 	    ->clipboard()
 	    ->setText(text);
+}
+
+bool QuickshellGlobal::setClipboardImage(const QString& path) {
+	QImage image(path);
+	if (image.isNull()) return false;
+	static_cast<QGuiApplication*>(QGuiApplication::instance()) // NOLINT
+	    ->clipboard()
+	    ->setImage(image);
+	return true;
 }
 
 void QuickshellGlobal::onClipboardChanged(QClipboard::Mode mode) {

@@ -465,10 +465,10 @@ int runCommand(int argc, char** argv, QCoreApplication* coreApplication) {
 
 	if (state.misc.checkCompat) {
 		if (strcmp(qVersion(), QT_VERSION_STR) != 0) {
-			QTextStream(stdout) << "\033[31mCOMPATIBILITY WARNING: noctalia-qs was built against Qt "
+			QTextStream(stdout) << "\033[31mCOMPATIBILITY WARNING: qs-mcs was built against Qt "
 			                    << QT_VERSION_STR << " but the system has updated to Qt " << qVersion()
 			                    << " without rebuilding the package. This is likely to cause crashes, so "
-			                       "you must rebuild the noctalia-qs package.\n\033[0m";
+			                       "you must rebuild the qs-mcs package.\n\033[0m";
 			return 1;
 		}
 
@@ -524,7 +524,7 @@ int runCommand(int argc, char** argv, QCoreApplication* coreApplication) {
 
 	if (state.misc.printVersion) {
 		if (state.log.verbosity == 0) {
-			qCInfo(logBare).noquote() << "noctalia-qs" << qs::debuginfo::qsVersion();
+			qCInfo(logBare).noquote() << "qs-mcs" << qs::debuginfo::qsVersion();
 		} else {
 			qCInfo(logBare).noquote() << qs::debuginfo::combinedInfo();
 		}
@@ -538,10 +538,10 @@ int runCommand(int argc, char** argv, QCoreApplication* coreApplication) {
 		return ipcCommand(state);
 	} else {
 		if (strcmp(qVersion(), QT_VERSION_STR) != 0) {
-			qWarning() << "\033[31mnoctalia-qs was built against Qt" << QT_VERSION_STR
+			qWarning() << "\033[31mqs-mcs was built against Qt" << QT_VERSION_STR
 			           << "but the system has updated to Qt" << qVersion()
 			           << "without rebuilding the package. This is likely to cause crashes, so "
-			              "the noctalia-qs package must be rebuilt.\n";
+			              "the qs-mcs package must be rebuilt.\n";
 		}
 
 		return launchFromCommand(state, coreApplication);
