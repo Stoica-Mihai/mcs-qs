@@ -72,7 +72,10 @@ public:
 	void remove(ClipboardEntry* entry);
 	void clear();
 
-	/// Add an entry directly (for clipboard sets by our own process,
+	/// Add a text entry and set it as the clipboard.
+	void addText(const QString& text);
+
+	/// Add an entry from a file and set it as the clipboard.
 	/// which the compositor may not echo back via ext_data_control).
 	void addFromFile(const QString& path, const QString& mimeType);
 

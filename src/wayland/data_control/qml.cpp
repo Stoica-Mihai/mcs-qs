@@ -26,6 +26,10 @@ void ClipboardHistoryQml::clear() {
 	ClipboardHistory::instance()->clear();
 }
 
+void ClipboardHistoryQml::addText(const QString& text) {
+	ClipboardHistory::instance()->addText(text);
+}
+
 void ClipboardHistoryQml::addFromFile(const QString& path, const QString& mimeType) {
 	ClipboardHistory::instance()->addFromFile(path, mimeType);
 }

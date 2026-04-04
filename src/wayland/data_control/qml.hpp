@@ -39,8 +39,9 @@ public:
 	Q_INVOKABLE void remove(ClipboardEntry* entry);
 	/// Clear all clipboard history.
 	Q_INVOKABLE void clear();
-	/// Add an entry from a file (for same-process clipboard sets
-	/// that the compositor may not echo back via data control).
+	/// Add a text entry and set it as the clipboard.
+	Q_INVOKABLE void addText(const QString& text);
+	/// Add an entry from a file and set it as the clipboard.
 	Q_INVOKABLE void addFromFile(const QString& path, const QString& mimeType);
 };
 

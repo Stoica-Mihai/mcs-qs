@@ -263,6 +263,19 @@ void ClipboardHistory::select(ClipboardEntry* entry) {
 	qCDebug(logDataControl) << "Set clipboard from history:" << entry->content().left(50);
 }
 
+void ClipboardHistory::addText(const QString& text) {
+	if (text.isEmpty()) return;
+	auto data = text.toUtf8();
+
+	mIsSettingSelection = true;
+	static_cast<QGuiApplication*>(QGuiApplication::instance()) // NOLINT
+	    ->clipboard()
+	    ->setText(text);
+	QTimer::singleShot(500, this, [this]() { mIsSettingSelection = false; });
+
+	addEntry(std::move(data), "text/plain;charset=utf-8", {"text/plain;charset=utf-8", "text/plain"});
+}
+
 void ClipboardHistory::addFromFile(const QString& path, const QString& mimeType) {
 	QFile file(path);
 	if (!file.open(QIODevice::ReadOnly)) return;
