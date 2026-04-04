@@ -7,6 +7,7 @@
 #include <qqmlintegration.h>
 #include <qtclasshelpermacros.h>
 #include <qtmetamacros.h>
+#include <qtimer.h>
 
 #include "../../core/model.hpp"
 #include "proto.hpp"
@@ -22,19 +23,23 @@ class ClipboardEntry: public QObject {
 	Q_PROPERTY(bool isImage READ isImage CONSTANT);
 	Q_PROPERTY(QString mimeType READ mimeType CONSTANT);
 	Q_PROPERTY(QDateTime timestamp READ timestamp CONSTANT);
+	/// Data URI for image entries (lazy base64 encoding on first access).
+	Q_PROPERTY(QString imageUrl READ imageUrl CONSTANT);
 
 public:
 	ClipboardEntry(
 	    QByteArray data,
 	    QString mimeType,
 	    QStringList allMimeTypes,
-	    QObject* parent = nullptr
+	    QObject* parent = nullptr,
+	    QDateTime timestamp = QDateTime::currentDateTime()
 	);
 
 	[[nodiscard]] const QString& content() const { return mContent; }
 	[[nodiscard]] bool isImage() const { return mIsImage; }
 	[[nodiscard]] const QString& mimeType() const { return mMimeType; }
 	[[nodiscard]] const QDateTime& timestamp() const { return mTimestamp; }
+	[[nodiscard]] QString imageUrl() const;
 
 	[[nodiscard]] const QByteArray& data() const { return mData; }
 	[[nodiscard]] const QStringList& allMimeTypes() const { return mAllMimeTypes; }
@@ -45,7 +50,8 @@ private:
 	QByteArray mHash;
 	QString mMimeType;
 	QStringList mAllMimeTypes;
-	QString mContent; // text preview or image description
+	QString mContent;
+	mutable QString mImageUrl; // lazy-cached data URI
 	bool mIsImage;
 	QDateTime mTimestamp;
 };
@@ -76,12 +82,17 @@ private:
 	void onSelectionChanged(impl::DataControlOffer* offer);
 	void startReading();
 	void addEntry(QByteArray data, const QString& mimeType, const QStringList& allMimeTypes);
+	void scheduleSave();
+	void save();
+	void load();
 
 	static QString chooseMimeType(const QStringList& mimeTypes);
+	static QString storagePath();
 
 	ObjectModel<ClipboardEntry> mEntries{this};
 	impl::DataControlDevice* mDevice = nullptr;
 	impl::DataControlOffer* mDeferredOffer = nullptr;
+	QTimer mSaveTimer;
 	bool mIsSettingSelection = false;
 };
 

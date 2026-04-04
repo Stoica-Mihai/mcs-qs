@@ -7,7 +7,11 @@
 #include <thread>
 
 #include <qclipboard.h>
+#include <qdatastream.h>
+#include <qdir.h>
 #include <qfile.h>
+#include <qsavefile.h>
+#include <qstandardpaths.h>
 #include <qguiapplication.h>
 #include <qimage.h>
 #include <qlogging.h>
@@ -35,14 +39,15 @@ ClipboardEntry::ClipboardEntry(
     QByteArray data,
     QString mimeType,
     QStringList allMimeTypes,
-    QObject* parent
+    QObject* parent,
+    QDateTime timestamp
 )
     : QObject(parent)
     , mData(std::move(data))
     , mHash(QCryptographicHash::hash(mData, QCryptographicHash::Md5))
     , mMimeType(std::move(mimeType))
     , mAllMimeTypes(std::move(allMimeTypes))
-    , mTimestamp(QDateTime::currentDateTime()) {
+    , mTimestamp(std::move(timestamp)) {
 	mIsImage = isImageMime(mMimeType);
 
 	if (mIsImage) {
@@ -60,6 +65,14 @@ ClipboardEntry::ClipboardEntry(
 	}
 }
 
+QString ClipboardEntry::imageUrl() const {
+	if (!mIsImage) return {};
+	if (mImageUrl.isEmpty()) {
+		mImageUrl = "data:" + mMimeType + ";base64," + mData.toBase64();
+	}
+	return mImageUrl;
+}
+
 
 // ── ClipboardHistory ────────────────────────────────
 
@@ -69,6 +82,12 @@ ClipboardHistory* ClipboardHistory::instance() {
 }
 
 ClipboardHistory::ClipboardHistory() {
+	mSaveTimer.setInterval(500);
+	mSaveTimer.setSingleShot(true);
+	QObject::connect(&mSaveTimer, &QTimer::timeout, this, &ClipboardHistory::save);
+
+	load();
+
 	auto* manager = impl::DataControlManager::instance();
 	if (!manager) {
 		qCWarning(logDataControl) << "ext-data-control-v1 not supported by compositor.";
@@ -216,6 +235,7 @@ void ClipboardHistory::addEntry(
 
 	auto* entry = new ClipboardEntry(std::move(data), mimeType, allMimeTypes, this);
 	mEntries.insertObject(entry, 0);
+	scheduleSave();
 	qCDebug(logDataControl) << "Added clipboard entry:" << entry->content().left(50);
 }
 
@@ -273,6 +293,7 @@ void ClipboardHistory::addFromFile(const QString& path, const QString& mimeType)
 void ClipboardHistory::remove(ClipboardEntry* entry) {
 	if (mEntries.removeObject(entry)) {
 		delete entry;
+		scheduleSave();
 	}
 }
 
@@ -283,6 +304,62 @@ void ClipboardHistory::clear() {
 		mEntries.removeObject(entry);
 		delete entry;
 	}
+	scheduleSave();
+}
+
+void ClipboardHistory::scheduleSave() { mSaveTimer.start(); }
+
+QString ClipboardHistory::storagePath() {
+	static const auto path = [] {
+		auto dir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
+		           + "/mcshell";
+		QDir().mkpath(dir);
+		return dir + "/clipboard.dat";
+	}();
+	return path;
+}
+
+void ClipboardHistory::save() {
+	QSaveFile file(storagePath());
+	if (!file.open(QIODevice::WriteOnly)) return;
+
+	QDataStream out(&file);
+	out.setVersion(QDataStream::Qt_6_0);
+
+	auto& list = mEntries.valueList();
+	out << static_cast<qint32>(list.size());
+	for (auto* entry : list) {
+		out << entry->mimeType() << entry->data() << entry->allMimeTypes() << entry->timestamp();
+	}
+
+	file.commit();
+	qCDebug(logDataControl) << "Saved" << list.size() << "clipboard entries";
+}
+
+void ClipboardHistory::load() {
+	QFile file(storagePath());
+	if (!file.open(QIODevice::ReadOnly)) return;
+
+	QDataStream in(&file);
+	in.setVersion(QDataStream::Qt_6_0);
+
+	qint32 count = 0;
+	in >> count;
+	count = std::min(count, static_cast<qint32>(MAX_ENTRIES));
+
+	for (qint32 i = 0; i < count && in.status() == QDataStream::Ok; i++) {
+		QString mimeType;
+		QByteArray data;
+		QStringList allMimeTypes;
+		QDateTime timestamp;
+		in >> mimeType >> data >> allMimeTypes >> timestamp;
+
+		if (data.isEmpty()) continue;
+		auto* entry = new ClipboardEntry(std::move(data), mimeType, allMimeTypes, this, timestamp);
+		mEntries.insertObject(entry);
+	}
+
+	qCDebug(logDataControl) << "Loaded" << mEntries.valueList().size() << "clipboard entries from disk";
 }
 
 } // namespace qs::wayland::data_control
