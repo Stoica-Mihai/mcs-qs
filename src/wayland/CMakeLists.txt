@@ -140,6 +140,9 @@ list(APPEND WAYLAND_MODULES Quickshell.Wayland._IdleNotify)
 add_subdirectory(data_control)
 list(APPEND WAYLAND_MODULES Quickshell.Wayland._DataControl)
 
+add_subdirectory(gamma_control)
+list(APPEND WAYLAND_MODULES Quickshell.Wayland._GammaControl)
+
 add_subdirectory(shortcuts_inhibit)
 list(APPEND WAYLAND_MODULES Quickshell.Wayland._ShortcutsInhibitor)
 
