@@ -129,6 +129,22 @@ void BluetoothAdapter::removeDevice(const QString& devicePath) {
 	);
 }
 
+void BluetoothAdapter::refreshProperties() {
+	auto* conn = new QMetaObject::Connection();
+	*conn = QObject::connect(
+	    &this->properties,
+	    &dbus::DBusPropertyGroup::getAllFinished,
+	    this,
+	    [this, conn]() {
+		    QObject::disconnect(*conn);
+		    delete conn;
+		    emit this->propertiesRefreshed();
+	    }
+	);
+
+	this->properties.updateAllViaGetAll();
+}
+
 void BluetoothAdapter::startDiscovery() {
 	if (this->bDiscovering) return;
 	qCDebug(logAdapter) << "Starting discovery for adapter" << this;

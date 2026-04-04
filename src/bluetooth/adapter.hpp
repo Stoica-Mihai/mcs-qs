@@ -132,6 +132,10 @@ public:
 	void startDiscovery();
 	void stopDiscovery();
 
+	/// Force a re-read of all adapter properties from D-Bus.
+	/// Useful when property change signals may have been missed.
+	Q_INVOKABLE void refreshProperties();
+
 signals:
 	void nameChanged();
 	void enabledChanged();
@@ -141,6 +145,7 @@ signals:
 	void discoveringChanged();
 	void pairableChanged();
 	void pairableTimeoutChanged();
+	void propertiesRefreshed();
 
 private:
 	DBusBluezAdapterInterface* mInterface = nullptr;
