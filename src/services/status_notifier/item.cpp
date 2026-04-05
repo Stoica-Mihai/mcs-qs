@@ -20,6 +20,7 @@
 #include <qtypes.h>
 
 #include "../../core/iconimageprovider.hpp"
+#include "../../core/threadutils.hpp"
 #include "../../core/imageprovider.hpp"
 #include "../../core/logcat.hpp"
 #include "../../core/platformmenu.hpp"
@@ -305,11 +306,14 @@ TrayImageHandle::requestPixmap(const QString& /*unused*/, QSize* size, const QSi
 	auto targetSize = requestedSize.isValid() ? requestedSize : QSize(100, 100);
 	if (targetSize.width() == 0 || targetSize.height() == 0) targetSize = QSize(2, 2);
 
-	auto pixmap = this->item->createPixmap(targetSize);
-	if (pixmap.isNull()) {
-		qCWarning(logStatusNotifierItem) << "Unable to create pixmap for tray icon" << this->item;
-		pixmap = IconImageProvider::missingPixmap(targetSize);
-	}
+	QPixmap pixmap;
+	runOnMainThread([&]() {
+		pixmap = this->item->createPixmap(targetSize);
+		if (pixmap.isNull()) {
+			qCWarning(logStatusNotifierItem) << "Unable to create pixmap for tray icon" << this->item;
+			pixmap = IconImageProvider::missingPixmap(targetSize);
+		}
+	});
 
 	if (size != nullptr) *size = pixmap.size();
 	return pixmap;

@@ -2,36 +2,21 @@
 #include <algorithm>
 
 #include <qcolor.h>
-#include <qcoreapplication.h>
 #include <qicon.h>
 #include <qlogging.h>
-#include <qmetaobject.h>
 #include <qpainter.h>
 #include <qpixmap.h>
 #include <qsize.h>
 #include <qstring.h>
-#include <qthread.h>
+
+#include "threadutils.hpp"
 
 QImage
 IconImageProvider::requestImage(const QString& id, QSize* size, const QSize& requestedSize) {
-	// QIcon::fromTheme() is not thread-safe. Qt Quick calls image providers
-	// from a worker thread, so marshal the actual icon lookup to the main
-	// thread to avoid racing on the global icon theme cache.
 	QImage result;
-	auto* app = QCoreApplication::instance();
-
-	if (QThread::currentThread() == app->thread()) {
-		result = doIconLookup(id, size, requestedSize);
-	} else {
-		QSize resultSize;
-		QMetaObject::invokeMethod(
-		    app,
-		    [&]() { result = doIconLookup(id, &resultSize, requestedSize); },
-		    Qt::BlockingQueuedConnection
-		);
-		if (size != nullptr) *size = resultSize;
-	}
-
+	QSize resultSize;
+	runOnMainThread([&]() { result = doIconLookup(id, &resultSize, requestedSize); });
+	if (size != nullptr) *size = resultSize;
 	return result;
 }
 
