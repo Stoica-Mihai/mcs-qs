@@ -10,14 +10,75 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  build:
+    name: Build Arch binary
     runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    outputs:
+      artifact-path: ${{ steps.package.outputs.path }}
+
+    steps:
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm --needed \
+            base-devel cmake ninja git \
+            qt6-base qt6-declarative qt6-wayland qt6-svg \
+            pipewire wayland libxcb libdrm mesa \
+            pam jemalloc libglvnd
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure
+        run: |
+          cmake -GNinja -B build \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_INSTALL_PREFIX=/usr
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Stage install + package tarball
+        id: package
+        run: |
+          set -euo pipefail
+          DESTDIR="${PWD}/staging" cmake --install build
+          TAG="${GITHUB_REF_NAME}"
+          NAME="mcs-qs-${TAG}-linux-x86_64"
+          mv staging "${NAME}"
+          tar -czf "${NAME}.tar.gz" "${NAME}"
+          sha256sum "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256"
+          echo "path=${NAME}.tar.gz" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-tarball
+          path: |
+            mcs-qs-*.tar.gz
+            mcs-qs-*.tar.gz.sha256
+          retention-days: 7
+
+  release:
+    name: Create GitHub release
+    runs-on: ubuntu-latest
+    needs: build
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 # needed so git describe/git log can see full history and tags
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-tarball
 
       - name: Generate release notes
         run: |
@@ -42,10 +103,20 @@ jobs:
           git log ${RANGE} --pretty=format:"- %s ([%h](https://github.com/${GITHUB_REPOSITORY}/commit/%H)) by %an" > /tmp/commits.txt || true
           head -c 120000 /tmp/commits.txt >> release_notes.md
           echo "" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "## Binary" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "Built on \`archlinux:latest\` against Qt6. Extract to \`/\` (or \`/usr/local\`) to install:" >> release_notes.md
+          echo '```sh' >> release_notes.md
+          echo "sudo tar xzf mcs-qs-${GITHUB_REF_NAME}-linux-x86_64.tar.gz -C /" >> release_notes.md
+          echo '```' >> release_notes.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           body_path: release_notes.md
+          files: |
+            mcs-qs-*.tar.gz
+            mcs-qs-*.tar.gz.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
