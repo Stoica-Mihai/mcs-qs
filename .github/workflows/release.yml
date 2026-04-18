@@ -40,7 +40,7 @@ jobs:
       - name: Configure
         run: |
           cmake -GNinja -B build \
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=/usr
 
       - name: Build
