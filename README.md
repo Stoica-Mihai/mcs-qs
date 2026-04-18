@@ -12,6 +12,7 @@ mcs-qs extends Quickshell with additional features and patches, including:
 - Clipboard image support (`setClipboardImage`)
 - IPC with optional arguments
 - Inverted corner support for regions
+- `Quickshell.Services.SysInfo` — native system monitoring (CPU, memory, temps, network, disk I/O, GPU). GPU metrics cover AMD via sysfs, NVIDIA via dlopened libnvidia-ml.so.1 (graceful fallback when absent), and Intel clock. Zero subprocess polling.
 
 The binary is named `mcs-qs` and is a drop-in replacement for `quickshell`.
 
