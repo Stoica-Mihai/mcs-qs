@@ -26,13 +26,16 @@ jobs:
           pacman -S --noconfirm --needed \
             base-devel cmake ninja git \
             qt6-base qt6-declarative qt6-wayland qt6-svg qt6-shadertools \
-            pipewire wayland libxcb libdrm mesa \
-            pam jemalloc libglvnd
+            pipewire wayland wayland-protocols libxcb libdrm mesa vulkan-headers \
+            pam jemalloc libglvnd cli11 glib2 polkit
 
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Mark checkout as safe (container UID mismatch)
+        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Configure
         run: |
