@@ -82,6 +82,7 @@ boption(SERVICE_POLKIT "Polkit" ON)
 boption(SERVICE_GREETD "Greetd" ON)
 boption(SERVICE_UPOWER "UPower" ON)
 boption(SERVICE_NOTIFICATIONS "Notifications" ON)
+boption(SERVICE_SYSINFO "System resource monitoring" ON)
 boption(BLUETOOTH "Bluetooth" ON)
 boption(NETWORK "Network" ON)
 
