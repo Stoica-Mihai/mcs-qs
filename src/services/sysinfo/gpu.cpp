@@ -2,6 +2,7 @@
 
 #include <qdir.h>
 #include <qfile.h>
+#include <qfileinfo.h>
 #include <qloggingcategory.h>
 
 #include <dlfcn.h>
@@ -61,6 +62,7 @@ constexpr nvmlReturn_t NVML_SUCCESS = 0;
 constexpr unsigned int NVML_CLOCK_GRAPHICS = 0;
 constexpr unsigned int NVML_TEMPERATURE_GPU = 0;
 constexpr unsigned int NVML_DEVICE_NAME_BUFFER_SIZE = 96;
+constexpr unsigned int NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE = 32;
 
 using nvmlDevice_t = void*;
 
@@ -75,6 +77,18 @@ struct nvmlMemory_t {
 	unsigned long long used;
 };
 
+// Layout matches nvml.h's nvmlPciInfo_st (v3). Fields after busId are
+// present in the ABI but unused here.
+struct nvmlPciInfo_t {
+	char busIdLegacy[16];
+	unsigned int domain;
+	unsigned int bus;
+	unsigned int device;
+	unsigned int pciDeviceId;
+	unsigned int pciSubSystemId;
+	char busId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
+};
+
 using pfn_nvmlInit_v2 = nvmlReturn_t (*)();
 using pfn_nvmlShutdown = nvmlReturn_t (*)();
 using pfn_nvmlDeviceGetCount_v2 = nvmlReturn_t (*)(unsigned int*);
@@ -85,6 +99,7 @@ using pfn_nvmlDeviceGetMemoryInfo = nvmlReturn_t (*)(nvmlDevice_t, nvmlMemory_t*
 using pfn_nvmlDeviceGetPowerUsage = nvmlReturn_t (*)(nvmlDevice_t, unsigned int*);
 using pfn_nvmlDeviceGetClockInfo = nvmlReturn_t (*)(nvmlDevice_t, unsigned int, unsigned int*);
 using pfn_nvmlDeviceGetTemperature = nvmlReturn_t (*)(nvmlDevice_t, unsigned int, unsigned int*);
+using pfn_nvmlDeviceGetPciInfo_v3 = nvmlReturn_t (*)(nvmlDevice_t, nvmlPciInfo_t*);
 
 struct Nvml {
 	pfn_nvmlInit_v2 init = nullptr;
@@ -97,6 +112,7 @@ struct Nvml {
 	pfn_nvmlDeviceGetPowerUsage getPower = nullptr;
 	pfn_nvmlDeviceGetClockInfo getClock = nullptr;
 	pfn_nvmlDeviceGetTemperature getTemperature = nullptr;
+	pfn_nvmlDeviceGetPciInfo_v3 getPciInfo = nullptr; // optional — older drivers lack it
 };
 
 Nvml gNvml;
@@ -123,6 +139,7 @@ void GpuScanner::scanDrmCards() {
 
 		if (vendor == QStringLiteral("0x1002")) {
 			AmdCard c;
+			c.cardName = entry;
 			c.path = cardPath + "/device";
 			// Resolve human name from modalias or fall back to device id.
 			c.name = QStringLiteral("AMD GPU (") + entry + QStringLiteral(")");
@@ -131,12 +148,31 @@ void GpuScanner::scanDrmCards() {
 			mAmdCards.push_back(std::move(c));
 		} else if (vendor == QStringLiteral("0x8086")) {
 			IntelCard c;
+			c.cardName = entry;
 			c.path = cardPath;
 			c.name = QStringLiteral("Intel GPU (") + entry + QStringLiteral(")");
 			mIntelCards.push_back(std::move(c));
+		} else if (vendor == QStringLiteral("0x10de")) {
+			// NVIDIA card — per-device data comes via NVML, but record the
+			// DRM card here so we can look up connector status by PCI.
+			NvidiaCard c;
+			c.cardName = entry;
+			// Resolve /sys/class/drm/cardN/device symlink; its final
+			// segment is the PCI bus id (e.g., "0000:01:00.0").
+			auto target = QFileInfo(cardPath + "/device").canonicalFilePath();
+			if (!target.isEmpty()) c.pciBusId = target.section('/', -1);
+			mNvidiaCards.push_back(std::move(c));
 		}
-		// NVIDIA cards are discovered via NVML, not sysfs.
 	}
+}
+
+bool GpuScanner::cardHasConnectedDisplay(const QString& cardName) {
+	QDir drm("/sys/class/drm");
+	auto connectors = drm.entryList({cardName + "-*"}, QDir::Dirs);
+	for (const auto& conn : connectors) {
+		if (readTrim(drm.filePath(conn) + "/status") == "connected") return true;
+	}
+	return false;
 }
 
 void GpuScanner::initNvml() {
@@ -215,6 +251,7 @@ void GpuScanner::sampleAmd(const AmdCard& card, QVariantList& out) {
 	}
 	m[QStringLiteral("power")] = power;
 	m[QStringLiteral("temperature")] = temperature;
+	m[QStringLiteral("connectedDisplay")] = cardHasConnectedDisplay(card.cardName);
 
 	out.append(m);
 }
@@ -231,6 +268,7 @@ void GpuScanner::sampleIntel(const IntelCard& card, QVariantList& out) {
 	auto clock = readLongLong(card.path + "/gt_act_freq_mhz");
 	m[QStringLiteral("clock")] = clock;
 	m[QStringLiteral("temperature")] = -1;
+	m[QStringLiteral("connectedDisplay")] = cardHasConnectedDisplay(card.cardName);
 
 	out.append(m);
 }
@@ -283,6 +321,31 @@ void GpuScanner::sampleNvidia(QVariantList& out) {
 		    = gNvml.getTemperature(dev, NVML_TEMPERATURE_GPU, &tempC) == NVML_SUCCESS
 		        ? qreal(tempC)
 		        : -1.0;
+
+		// Match this NVML device to a DRM card by PCI bus id so we can
+		// surface connectedDisplay consistently with AMD/Intel. When the
+		// match fails (older driver without getPciInfo_v3, virtual device,
+		// etc.) fall back to the first NVIDIA card's status if there's
+		// exactly one — otherwise treat as not-connected rather than lie.
+		bool connected = false;
+		bool matched = false;
+		if (gNvml.getPciInfo) {
+			nvmlPciInfo_t pci = {};
+			if (gNvml.getPciInfo(dev, &pci) == NVML_SUCCESS) {
+				auto busId = QString::fromLatin1(pci.busId).toLower();
+				for (const auto& card : mNvidiaCards) {
+					if (card.pciBusId.toLower() == busId) {
+						connected = cardHasConnectedDisplay(card.cardName);
+						matched = true;
+						break;
+					}
+				}
+			}
+		}
+		if (!matched && mNvidiaCards.size() == 1) {
+			connected = cardHasConnectedDisplay(mNvidiaCards.front().cardName);
+		}
+		m[QStringLiteral("connectedDisplay")] = connected;
 
 		out.append(m);
 	}
