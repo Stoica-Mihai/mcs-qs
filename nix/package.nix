@@ -87,8 +87,8 @@ stdenv.mkDerivation {
   cmakeBuildType = "Release";
 
   meta = {
-    homepage = "https://github.com/noctalia-dev/noctalia-qs";
-    description = "Flexible QtQuick based desktop shell toolkit for Noctalia";
+    homepage = "https://github.com/Stoica-Mihai/mcs-qs";
+    description = "Quickshell fork with IPC optional-args patch and extra native modules";
     license = lib.licenses.lgpl3Only;
     platforms = lib.platforms.linux;
     mainProgram = "quickshell";

@@ -1,5 +1,5 @@
 {
-  description = "noctalia-qs - flexible QtQuick based desktop shell toolkit for Noctalia";
+  description = "mcs-qs — Quickshell fork with IPC optional-args patch and extra native modules";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";

@@ -41,7 +41,7 @@ int parseCommand(int argc, char** argv, CommandState& state) {
 		                 ->envname("QS_CONFIG_PATH");
 
 		group->add_option("-c,--config", state.config.name)
-		    ->description("Name of a noctalia-qs configuration to run.")
+		    ->description("Name of a mcs-qs configuration to run.")
 		    ->envname("QS_CONFIG_NAME")
 		    ->excludes(path);
 
@@ -126,7 +126,7 @@ int parseCommand(int argc, char** argv, CommandState& state) {
 	};
 
 	state.app = std::make_unique<CLI::App>(
-	    std::string("noctalia-qs " QS_VERSION ", revision ") + std::string(GIT_REVISION).substr(0, 8)
+	    std::string("mcs-qs " QS_VERSION ", revision ") + std::string(GIT_REVISION).substr(0, 8)
 	    + ", distributed by: " DISTRIBUTOR
 	);
 	auto* cli = state.app.get();
@@ -142,7 +142,7 @@ int parseCommand(int argc, char** argv, CommandState& state) {
 		cli->add_option_group("")->add_flag("--private-check-compat", state.misc.checkCompat);
 
 		cli->add_flag("-V,--version", state.misc.printVersion)
-		    ->description("Print noctalia-qs's version and exit.");
+		    ->description("Print mcs-qs's version and exit.");
 
 		cli->add_flag("-n,--no-duplicate{true},!--allow-duplicate{false}", state.misc.noDuplicate)
 		    ->description(
@@ -155,7 +155,7 @@ int parseCommand(int argc, char** argv, CommandState& state) {
 	}
 
 	{
-		auto* sub = cli->add_subcommand("log", "Print noctalia-qs logs.");
+		auto* sub = cli->add_subcommand("log", "Print mcs-qs logs.");
 
 		auto* file = sub->add_option("file", state.log.file, "Log file to read.");
 
@@ -177,7 +177,7 @@ int parseCommand(int argc, char** argv, CommandState& state) {
 	}
 
 	{
-		auto* sub = cli->add_subcommand("list", "List running noctalia-qs instances.");
+		auto* sub = cli->add_subcommand("list", "List running mcs-qs instances.");
 
 		auto* all = sub->add_flag("-a,--all", state.instance.all)
 		                ->description(
@@ -198,7 +198,7 @@ int parseCommand(int argc, char** argv, CommandState& state) {
 	}
 
 	{
-		auto* sub = cli->add_subcommand("kill", "Kill noctalia-qs instances.");
+		auto* sub = cli->add_subcommand("kill", "Kill mcs-qs instances.");
 		//sub->add_flag("-a,--all", "Kill all matching instances instead of just one.");
 		auto* instance = addInstanceSelection(sub);
 		addConfigSelection(sub, true)->excludes(instance);
@@ -208,7 +208,7 @@ int parseCommand(int argc, char** argv, CommandState& state) {
 	}
 
 	{
-		auto* sub = cli->add_subcommand("ipc", "Communicate with other noctalia-qs instances.")
+		auto* sub = cli->add_subcommand("ipc", "Communicate with other mcs-qs instances.")
 		                ->require_subcommand();
 		state.ipc.ipc = sub;
 

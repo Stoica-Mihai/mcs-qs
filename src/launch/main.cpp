@@ -53,7 +53,7 @@ void checkCrashRelaunch(char** argv, QCoreApplication* coreApplication) {
 		    info.logRules
 		);
 
-		qCritical().nospace() << "noctalia-qs has crashed under pid "
+		qCritical().nospace() << "mcs-qs has crashed under pid "
 		                      << qEnvironmentVariable("__QUICKSHELL_CRASH_DUMP_PID").toInt()
 		                      << " (Coredumps will be available under that pid.)";
 
@@ -61,11 +61,11 @@ void checkCrashRelaunch(char** argv, QCoreApplication* coreApplication) {
 		            << QsPaths::crashDir(info.instance.instanceId).path();
 
 		if (info.instance.launchTime.msecsTo(QDateTime::currentDateTime()) < 10000) {
-			qCritical() << "noctalia-qs crashed within 10 seconds of launching. Not restarting to avoid "
+			qCritical() << "mcs-qs crashed within 10 seconds of launching. Not restarting to avoid "
 			               "a crash loop.";
 			exit(-1); // NOLINT
 		} else {
-			qCritical() << "noctalia-qs has been restarted.";
+			qCritical() << "mcs-qs has been restarted.";
 
 			launch({.configPath = info.instance.configPath}, argv, coreApplication);
 		}
@@ -105,7 +105,7 @@ void exitDaemon(int code) {
 }
 
 int main(int argc, char** argv) {
-	QCoreApplication::setApplicationName("noctalia-qs");
+	QCoreApplication::setApplicationName("mcs-qs");
 
 #if !CRASH_HANDLER
 	(void)argc;

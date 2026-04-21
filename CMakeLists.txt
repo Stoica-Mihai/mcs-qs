@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(QS_BUILD_OPTIONS "")
 
 # should be changed for forks
-set(CRASHREPORT_URL "https://github.com/noctalia-dev/noctalia-qs/issues/new" CACHE STRING "Bugreport URL")
+set(CRASHREPORT_URL "https://github.com/Stoica-Mihai/mcs-qs/issues/new" CACHE STRING "Bugreport URL")
 
 function(boption VAR NAME DEFAULT)
 	cmake_parse_arguments(PARSE_ARGV 3 arg "" "REQUIRES" "")
@@ -175,12 +175,12 @@ install(CODE "
 ")
 
 install(
-	FILES ${CMAKE_SOURCE_DIR}/assets/dev.noctalia.noctalia-qs.desktop
+	FILES ${CMAKE_SOURCE_DIR}/assets/dev.mcs.mcs-qs.desktop
 	DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
 )
 
 install(
-	FILES ${CMAKE_SOURCE_DIR}/assets/noctalia-qs.svg
+	FILES ${CMAKE_SOURCE_DIR}/assets/mcs-qs.svg
 	DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
-	RENAME dev.noctalia.noctalia-qs.svg
+	RENAME dev.mcs.mcs-qs.svg
 )
