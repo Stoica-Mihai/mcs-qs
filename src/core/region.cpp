@@ -4,11 +4,13 @@
 
 #include <qobject.h>
 #include <qpoint.h>
+#include <qpolygon.h>
 #include <qqmllist.h>
 #include <qquickitem.h>
 #include <qregion.h>
 #include <qtmetamacros.h>
 #include <qtypes.h>
+#include <qvariant.h>
 #include <qvectornd.h>
 
 PendingRegion::PendingRegion(QObject* parent): QObject(parent) {
@@ -20,6 +22,7 @@ PendingRegion::PendingRegion(QObject* parent): QObject(parent) {
 	QObject::connect(this, &PendingRegion::widthChanged, this, &PendingRegion::changed);
 	QObject::connect(this, &PendingRegion::heightChanged, this, &PendingRegion::changed);
 	QObject::connect(this, &PendingRegion::radiusChanged, this, &PendingRegion::changed);
+	QObject::connect(this, &PendingRegion::polygonChanged, this, &PendingRegion::changed);
 	QObject::connect(this, &PendingRegion::topLeftCornerChanged, this, &PendingRegion::changed);
 	QObject::connect(this, &PendingRegion::topRightCornerChanged, this, &PendingRegion::changed);
 	QObject::connect(this, &PendingRegion::bottomLeftCornerChanged, this, &PendingRegion::changed);
@@ -66,7 +69,7 @@ QQmlListProperty<PendingRegion> PendingRegion::regions() {
 
 bool PendingRegion::empty() const {
 	return this->mItem == nullptr && this->mX == 0 && this->mY == 0 && this->mWidth == 0
-	    && this->mHeight == 0;
+	    && this->mHeight == 0 && this->mPolygon.isEmpty();
 }
 
 QRegion PendingRegion::build() const {
@@ -80,6 +83,22 @@ QRegion PendingRegion::build() const {
 
 	if (this->empty()) {
 		region = QRegion();
+	} else if (!this->mPolygon.isEmpty()) {
+		// Polygon takes precedence — when @item is set, points are in
+		// item-local coords and mapped to scene; otherwise scene coords.
+		QPolygon poly;
+		poly.reserve(static_cast<int>(this->mPolygon.size()));
+		for (const auto& v: this->mPolygon) {
+			const auto pt = v.toList();
+			if (pt.size() < 2) continue;
+			auto local = QPointF(pt[0].toReal(), pt[1].toReal());
+			auto scene = this->mItem != nullptr ? this->mItem->mapToScene(local) : local;
+			poly.append(QPoint(
+			    static_cast<int>(std::round(scene.x())),
+			    static_cast<int>(std::round(scene.y()))
+			));
+		}
+		region = QRegion(poly, Qt::OddEvenFill);
 	} else if (this->mItem != nullptr) {
 		auto origin = this->mItem->mapToScene(QPointF(0, 0));
 		auto extent = this->mItem->mapToScene(QPointF(this->mItem->width(), this->mItem->height()));

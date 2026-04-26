@@ -8,6 +8,7 @@
 #include <qregion.h>
 #include <qtmetamacros.h>
 #include <qtypes.h>
+#include <qvariant.h>
 
 ///! Shape of a Region.
 /// See @@Region.shape.
@@ -91,6 +92,20 @@ class PendingRegion: public QObject {
 	/// Corner radius for rounded rectangles. Only applies when @@shape is `Rect`. Defaults to 0.
 	Q_PROPERTY(qint32 radius MEMBER mRadius NOTIFY radiusChanged);
 
+	/// A polygon describing the region. When set, takes precedence over
+	/// @@x/@@y/@@width/@@height and the rectangular interpretation of @@item.
+	/// Each entry is a `[x, y]` array. If @@item is also set, polygon points
+	/// are interpreted in that item's local coordinates and mapped to scene
+	/// coordinates automatically; otherwise they are scene/window coordinates.
+	///
+	/// ```qml
+	/// Region {
+	///     item: someItem
+	///     polygon: [[0, 0], [width, 0], [width - 14, height], [0, height]]
+	/// }
+	/// ```
+	Q_PROPERTY(QVariantList polygon MEMBER mPolygon NOTIFY polygonChanged);
+
 	/// Corner state for the top-left corner. Defaults to `Normal`.
 	/// See @@CornerState for possible values.
 	Q_PROPERTY(CornerState::Enum topLeftCorner MEMBER mTopLeftCorner NOTIFY topLeftCornerChanged);
@@ -148,6 +163,7 @@ signals:
 	void widthChanged();
 	void heightChanged();
 	void radiusChanged();
+	void polygonChanged();
 	void topLeftCornerChanged();
 	void topRightCornerChanged();
 	void bottomLeftCornerChanged();
@@ -180,6 +196,8 @@ private:
 	qint32 mWidth = 0;
 	qint32 mHeight = 0;
 	qint32 mRadius = 0;
+
+	QVariantList mPolygon;
 
 	CornerState::Enum mTopLeftCorner = CornerState::Normal;
 	CornerState::Enum mTopRightCorner = CornerState::Normal;
