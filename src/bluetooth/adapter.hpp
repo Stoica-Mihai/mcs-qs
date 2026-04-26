@@ -136,6 +136,9 @@ public:
 	/// Useful when property change signals may have been missed.
 	Q_INVOKABLE void refreshProperties();
 
+private slots:
+	void onStateChanged();
+
 signals:
 	void nameChanged();
 	void enabledChanged();
@@ -148,8 +151,11 @@ signals:
 	void propertiesRefreshed();
 
 private:
+	static bool tryRfkillUnblock();
+
 	DBusBluezAdapterInterface* mInterface = nullptr;
 	ObjectModel<BluetoothDevice> mDevices {this};
+	bool mPendingEnable = false;
 
 	// clang-format off
 	Q_OBJECT_BINDABLE_PROPERTY(BluetoothAdapter, QString, bName, &BluetoothAdapter::nameChanged);
