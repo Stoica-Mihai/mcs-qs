@@ -5,10 +5,13 @@
 #include <pipewire/type.h>
 #include <qcontainerfwd.h>
 #include <qflags.h>
+#include <qlist.h>
 #include <qmap.h>
 #include <qobject.h>
 #include <qqmlintegration.h>
+#include <qset.h>
 #include <qtclasshelpermacros.h>
+#include <qtimer.h>
 #include <qtmetamacros.h>
 #include <qtypes.h>
 #include <spa/param/audio/raw.h>
@@ -222,6 +225,21 @@ private:
 	QVector<float> waitingVolumes;
 	float volumeStep = -1;
 	PwNode* node;
+
+	// Supported sample rates from EnumFormat enumeration. The list is
+	// rebuilt asynchronously: each pod arrives via onSpaParam, accumulating
+	// into mPendingRates; once the burst settles ratesCommitTimer commits
+	// the result to mSupportedRates and emits supportedRatesChanged.
+public:
+	[[nodiscard]] QList<qint32> supportedRates() const { return this->mSupportedRates; }
+signals:
+	void supportedRatesChanged();
+private:
+	QSet<qint32> mPendingRates;
+	QList<qint32> mSupportedRates;
+	QTimer* ratesCommitTimer = nullptr;
+	void parseEnumFormatRates(const spa_pod* param);
+	void commitSupportedRates();
 };
 
 class PwNode: public PwBindable<pw_node, PW_TYPE_INTERFACE_Node, PW_VERSION_NODE> {

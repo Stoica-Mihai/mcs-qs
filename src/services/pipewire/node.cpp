@@ -15,8 +15,10 @@
 #include <qtmetamacros.h>
 #include <qtypes.h>
 #include <spa/node/keys.h>
+#include <spa/param/format.h>
 #include <spa/param/param.h>
 #include <spa/param/props.h>
+#include <algorithm>
 #include <spa/pod/builder.h>
 #include <spa/pod/iter.h>
 #include <spa/pod/pod.h>
@@ -303,6 +305,19 @@ PwNodeBoundAudio::PwNodeBoundAudio(PwNode* node): QObject(node), node(node) {
 		    &PwNodeBoundAudio::onDeviceVolumesChanged
 		);
 	}
+
+	// EnumFormat enumeration delivers each supported format as a separate
+	// onSpaParam callback; we accumulate into mPendingRates and commit
+	// once the burst settles so the QML side sees one supportedRatesChanged.
+	this->ratesCommitTimer = new QTimer(this);
+	this->ratesCommitTimer->setSingleShot(true);
+	this->ratesCommitTimer->setInterval(80);
+	QObject::connect(
+	    this->ratesCommitTimer,
+	    &QTimer::timeout,
+	    this,
+	    &PwNodeBoundAudio::commitSupportedRates
+	);
 }
 
 void PwNodeBoundAudio::onDeviceChanged() {
@@ -327,6 +342,12 @@ void PwNodeBoundAudio::onInfo(const pw_node_info* info) {
 					qCWarning(logNode) << "Unable to enumerate props param for" << this->node
 					                   << "as the param does not have read+write permissions.";
 				}
+			} else if (param.id == SPA_PARAM_EnumFormat) {
+				if ((param.flags & SPA_PARAM_INFO_READ) != 0) {
+					qCDebug(logNode) << "Enumerating EnumFormat for" << this->node;
+					this->mPendingRates.clear();
+					pw_node_enum_params(this->node->proxy(), 0, param.id, 0, UINT32_MAX, nullptr);
+				}
 			}
 		}
 	}
@@ -342,6 +363,9 @@ void PwNodeBoundAudio::onSpaParam(quint32 id, quint32 index, const spa_pod* para
 		}
 
 		this->updateVolumeProps(PwVolumeProps::parseSpaPod(param));
+	} else if (id == SPA_PARAM_EnumFormat) {
+		this->parseEnumFormatRates(param);
+		this->ratesCommitTimer->start();
 	}
 }
 
@@ -610,6 +634,69 @@ PwVolumeProps PwVolumeProps::parseSpaPod(const spa_pod* param) {
 	}
 
 	return props;
+}
+
+// ── Sample-rate enumeration ─────────────────────────────
+// EnumFormat returns a stream of SPA_TYPE_OBJECT_Format pods, each
+// describing one supported audio configuration. We only care about the
+// rate property; bit depth varies less between devices and the device
+// usually accepts whatever the stream provides.
+void PwNodeBoundAudio::parseEnumFormatRates(const spa_pod* param) {
+	if (!spa_pod_is_object_type(param, SPA_TYPE_OBJECT_Format)) return;
+
+	const spa_pod_prop* rateProp =
+	    spa_pod_object_find_prop(reinterpret_cast<const spa_pod_object*>(param),
+	                             nullptr, SPA_FORMAT_AUDIO_rate);
+	if (rateProp == nullptr) return;
+
+	const spa_pod* val = &rateProp->value;
+	if (val->type == SPA_TYPE_Int) {
+		qint32 v;
+		if (spa_pod_get_int(val, &v) >= 0 && v > 0) this->mPendingRates.insert(v);
+		return;
+	}
+	if (val->type != SPA_TYPE_Choice) return;
+
+	const auto* choice = reinterpret_cast<const spa_pod_choice*>(val);
+	const auto type = SPA_POD_CHOICE_TYPE(choice);
+	const auto* values = static_cast<const qint32*>(SPA_POD_CHOICE_VALUES(choice));
+	const auto n = SPA_POD_CHOICE_N_VALUES(choice);
+
+	switch (type) {
+	case SPA_CHOICE_None:
+		if (n >= 1 && values[0] > 0) this->mPendingRates.insert(values[0]);
+		break;
+	case SPA_CHOICE_Enum:
+		// values[0] is the default; values[1..] are alternatives. Include all.
+		for (quint32 i = 0; i < n; ++i) {
+			if (values[i] > 0) this->mPendingRates.insert(values[i]);
+		}
+		break;
+	case SPA_CHOICE_Range: {
+		// values: [default, min, max]. The device claims any rate in [min, max].
+		// Filter the common-rate set against the range.
+		if (n < 3) break;
+		const qint32 lo = values[1];
+		const qint32 hi = values[2];
+		static constexpr qint32 common[] = {44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000};
+		for (auto r: common) {
+			if (r >= lo && r <= hi) this->mPendingRates.insert(r);
+		}
+		// Also include the default if it's outside the common set.
+		if (values[0] > 0) this->mPendingRates.insert(values[0]);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+void PwNodeBoundAudio::commitSupportedRates() {
+	auto sorted = this->mPendingRates.values();
+	std::sort(sorted.begin(), sorted.end());
+	if (sorted == this->mSupportedRates) return;
+	this->mSupportedRates = sorted;
+	emit this->supportedRatesChanged();
 }
 
 } // namespace qs::service::pipewire

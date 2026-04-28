@@ -240,6 +240,13 @@ class PwNodeAudioIface: public QObject {
 	///
 	/// > [!WARNING] This property is invalid unless the node is bound using @@PwObjectTracker.
 	Q_PROPERTY(QVector<float> volumes READ volumes WRITE setVolumes NOTIFY volumesChanged);
+	/// Sample rates (Hz) the active port reports as supported, in ascending
+	/// order. Empty until the node has been bound (use a @@PwObjectTracker)
+	/// and PipeWire has finished enumerating EnumFormat. PipeWire still
+	/// honors clock.force-rate on rates outside this list — but it'll
+	/// silently fall back to the device's preferred value if the card can't
+	/// negotiate the requested rate.
+	Q_PROPERTY(QList<qint32> supportedRates READ supportedRates NOTIFY supportedRatesChanged);
 	// clang-format on
 	QML_NAMED_ELEMENT(PwNodeAudio);
 	QML_UNCREATABLE("PwNodeAudio cannot be created directly");
@@ -258,10 +265,13 @@ public:
 	[[nodiscard]] QVector<float> volumes() const;
 	void setVolumes(const QVector<float>& volumes);
 
+	[[nodiscard]] QList<qint32> supportedRates() const;
+
 signals:
 	void mutedChanged();
 	void channelsChanged();
 	void volumesChanged();
+	void supportedRatesChanged();
 
 private:
 	PwNodeBoundAudio* boundData;

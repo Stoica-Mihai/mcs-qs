@@ -293,6 +293,7 @@ PwNodeAudioIface::PwNodeAudioIface(PwNodeBoundAudio* boundData, QObject* parent)
 	QObject::connect(boundData, &PwNodeBoundAudio::mutedChanged, this, &PwNodeAudioIface::mutedChanged);
 	QObject::connect(boundData, &PwNodeBoundAudio::channelsChanged, this, &PwNodeAudioIface::channelsChanged);
 	QObject::connect(boundData, &PwNodeBoundAudio::volumesChanged, this, &PwNodeAudioIface::volumesChanged);
+	QObject::connect(boundData, &PwNodeBoundAudio::supportedRatesChanged, this, &PwNodeAudioIface::supportedRatesChanged);
 	// clang-format on
 }
 
@@ -312,6 +313,10 @@ QVector<float> PwNodeAudioIface::volumes() const { return this->boundData->volum
 
 void PwNodeAudioIface::setVolumes(const QVector<float>& volumes) {
 	this->boundData->setVolumes(volumes);
+}
+
+QList<qint32> PwNodeAudioIface::supportedRates() const {
+	return this->boundData->supportedRates();
 }
 
 PwNodeIface::PwNodeIface(PwNode* node): PwObjectIface(node), mNode(node) {
