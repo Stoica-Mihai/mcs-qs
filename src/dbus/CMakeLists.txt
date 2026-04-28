@@ -42,3 +42,4 @@ qs_add_pchset(dbus
 qs_pch(quickshell-dbus SET dbus)
 
 add_subdirectory(dbusmenu)
+add_subdirectory(server)
