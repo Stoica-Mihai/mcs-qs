@@ -256,12 +256,16 @@ private:
 	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pWakeAllowed, bWakeAllowed, properties, "WakeAllowed");
 	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pIcon, bIcon, properties, "Icon");
 	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pAdapterPath, bAdapterPath, properties, "Adapter");
-	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pRssi, bRssi, properties, "RSSI");
-	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pTxPower, bTxPower, properties, "TxPower");
+	// BlueZ exposes RSSI / TxPower / Appearance / Modalias only when relevant
+	// (RSSI / TxPower require active discovery; Appearance is BLE-only;
+	// Modalias is set by some devices, omitted by others). Mark optional so
+	// reading them on devices that don't advertise them doesn't log warnings.
+	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pRssi, bRssi, properties, "RSSI", false);
+	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pTxPower, bTxPower, properties, "TxPower", false);
 	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pUuids, bUuids, properties, "UUIDs");
 	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pBluetoothClass, bBluetoothClass, properties, "Class");
-	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pAppearance, bAppearance, properties, "Appearance");
-	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pModalias, bModalias, properties, "Modalias");
+	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pAppearance, bAppearance, properties, "Appearance", false);
+	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pModalias, bModalias, properties, "Modalias", false);
 	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pLegacyPairing, bLegacyPairing, properties, "LegacyPairing");
 	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pServicesResolved, bServicesResolved, properties, "ServicesResolved");
 
