@@ -108,6 +108,9 @@ void NMWirelessNetwork::updateReferenceAp() {
 	if (this->mReferenceAp != selectedAp) {
 		this->mReferenceAp = selectedAp;
 		this->bSignalStrength.setBinding([selectedAp]() { return selectedAp->signalStrength(); });
+		this->bFrequency.setBinding([selectedAp]() { return selectedAp->frequency(); });
+		this->bBssid.setBinding([selectedAp]() { return selectedAp->hwAddress(); });
+		this->bMaxBitrate.setBinding([selectedAp]() { return selectedAp->maxBitrate(); });
 		// Reference AP is used for security when there's no connection settings.
 		if (!this->mReferenceSettings) {
 			this->bSecurity.setBinding([selectedAp]() { return selectedAp->security(); });
@@ -391,6 +394,9 @@ void NMWirelessDevice::registerFrontendNetwork(NMWirelessNetwork* net) {
 	frontendNet->bindableConnected().setBinding(translateState);
 	frontendNet->bindableKnown().setBinding([net]() { return net->known(); });
 	frontendNet->bindableSecurity().setBinding([net]() { return net->security(); });
+	frontendNet->bindableFrequency().setBinding([net]() { return net->frequency(); });
+	frontendNet->bindableBssid().setBinding([net]() { return net->bssid(); });
+	frontendNet->bindableMaxBitrate().setBinding([net]() { return net->maxBitrate(); });
 	frontendNet->bindableState().setBinding([net]() {
 		return static_cast<ConnectionState::Enum>(net->state());
 	});

@@ -24,6 +24,13 @@ class WifiNetwork: public Network {
 	Q_PROPERTY(qreal signalStrength READ default NOTIFY signalStrengthChanged BINDABLE bindableSignalStrength);
 	/// The security type of the wifi network.
 	Q_PROPERTY(WifiSecurityType::Enum security READ default NOTIFY securityChanged BINDABLE bindableSecurity);
+	/// Radio frequency of the strongest known access point for this network, in MHz. 0 if unknown.
+	/// 2400-2495 is the 2.4 GHz band; 5150-5895 is 5 GHz; 5945-7125 is 6 GHz.
+	Q_PROPERTY(quint32 frequency READ default NOTIFY frequencyChanged BINDABLE bindableFrequency);
+	/// MAC address (BSSID) of the strongest known access point for this network. Empty if unknown.
+	Q_PROPERTY(QString bssid READ default NOTIFY bssidChanged BINDABLE bindableBssid);
+	/// Maximum bitrate the strongest known access point advertises, in kbit/s. 0 if unknown.
+	Q_PROPERTY(quint32 maxBitrate READ default NOTIFY maxBitrateChanged BINDABLE bindableMaxBitrate);
 	// clang-format on
 
 public:
@@ -41,16 +48,25 @@ public:
 
 	QBindable<qreal> bindableSignalStrength() { return &this->bSignalStrength; }
 	QBindable<WifiSecurityType::Enum> bindableSecurity() { return &this->bSecurity; }
+	QBindable<quint32> bindableFrequency() { return &this->bFrequency; }
+	QBindable<QString> bindableBssid() { return &this->bBssid; }
+	QBindable<quint32> bindableMaxBitrate() { return &this->bMaxBitrate; }
 
 signals:
 	QSDOC_HIDE void requestConnectWithPsk(QString psk);
 	void signalStrengthChanged();
 	void securityChanged();
+	void frequencyChanged();
+	void bssidChanged();
+	void maxBitrateChanged();
 
 private:
 	// clang-format off
 	Q_OBJECT_BINDABLE_PROPERTY(WifiNetwork, qreal, bSignalStrength, &WifiNetwork::signalStrengthChanged);
 	Q_OBJECT_BINDABLE_PROPERTY(WifiNetwork, WifiSecurityType::Enum, bSecurity, &WifiNetwork::securityChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(WifiNetwork, quint32, bFrequency, &WifiNetwork::frequencyChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(WifiNetwork, QString, bBssid, &WifiNetwork::bssidChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(WifiNetwork, quint32, bMaxBitrate, &WifiNetwork::maxBitrateChanged);
 	// clang-format on
 };
 
@@ -69,6 +85,8 @@ class WifiDevice: public NetworkDevice {
 	Q_PROPERTY(bool scannerEnabled READ scannerEnabled WRITE setScannerEnabled NOTIFY scannerEnabledChanged BINDABLE bindableScannerEnabled);
 	/// The 802.11 mode the device is in.
 	Q_PROPERTY(WifiDeviceMode::Enum mode READ default NOTIFY modeChanged BINDABLE bindableMode);
+	/// Current negotiated link bitrate in kbit/s, or 0 when not connected.
+	Q_PROPERTY(quint32 bitrate READ default NOTIFY bitrateChanged BINDABLE bindableBitrate);
 	// clang-format on
 
 public:
@@ -82,15 +100,18 @@ public:
 	[[nodiscard]] bool scannerEnabled() const { return this->bScannerEnabled; }
 	void setScannerEnabled(bool enabled);
 	QBindable<WifiDeviceMode::Enum> bindableMode() { return &this->bMode; }
+	QBindable<quint32> bindableBitrate() { return &this->bBitrate; }
 
 signals:
 	void modeChanged();
 	void scannerEnabledChanged(bool enabled);
+	void bitrateChanged();
 
 private:
 	ObjectModel<WifiNetwork> mNetworks {this};
 	Q_OBJECT_BINDABLE_PROPERTY(WifiDevice, bool, bScannerEnabled, &WifiDevice::scannerEnabledChanged);
 	Q_OBJECT_BINDABLE_PROPERTY(WifiDevice, WifiDeviceMode::Enum, bMode, &WifiDevice::modeChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(WifiDevice, quint32, bBitrate, &WifiDevice::bitrateChanged);
 };
 
 }; // namespace qs::network

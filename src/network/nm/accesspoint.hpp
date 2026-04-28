@@ -56,6 +56,9 @@ public:
 	[[nodiscard]] NM80211Mode::Enum mode() const { return this->bMode; }
 	[[nodiscard]] QBindable<WifiSecurityType::Enum> bindableSecurity() { return &this->bSecurity; }
 	[[nodiscard]] WifiSecurityType::Enum security() const { return this->bSecurity; }
+	[[nodiscard]] quint32 frequency() const { return this->bFrequency; }
+	[[nodiscard]] QString hwAddress() const { return this->bHwAddress; }
+	[[nodiscard]] quint32 maxBitrate() const { return this->bMaxBitrate; }
 
 signals:
 	void loaded();
@@ -66,6 +69,9 @@ signals:
 	void rsnFlagsChanged(NM80211ApSecurityFlags::Enum rsnFlags);
 	void modeChanged(NM80211Mode::Enum mode);
 	void securityChanged(WifiSecurityType::Enum security);
+	void frequencyChanged(quint32 frequency);
+	void hwAddressChanged(const QString& hwAddress);
+	void maxBitrateChanged(quint32 maxBitrate);
 
 private:
 	// clang-format off
@@ -76,6 +82,9 @@ private:
 	Q_OBJECT_BINDABLE_PROPERTY(NMAccessPoint, NM80211ApSecurityFlags::Enum, bRsnFlags, &NMAccessPoint::rsnFlagsChanged);
 	Q_OBJECT_BINDABLE_PROPERTY(NMAccessPoint, NM80211Mode::Enum, bMode, &NMAccessPoint::modeChanged);
 	Q_OBJECT_BINDABLE_PROPERTY(NMAccessPoint, WifiSecurityType::Enum, bSecurity, &NMAccessPoint::securityChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(NMAccessPoint, quint32, bFrequency, &NMAccessPoint::frequencyChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(NMAccessPoint, QString, bHwAddress, &NMAccessPoint::hwAddressChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(NMAccessPoint, quint32, bMaxBitrate, &NMAccessPoint::maxBitrateChanged);
 
 	QS_DBUS_BINDABLE_PROPERTY_GROUP(NMAccessPointAdapter, accessPointProperties);
 	QS_DBUS_PROPERTY_BINDING(NMAccessPoint, pSsid, bSsid, accessPointProperties, "Ssid");
@@ -84,6 +93,9 @@ private:
 	QS_DBUS_PROPERTY_BINDING(NMAccessPoint, pWpaFlags, bWpaFlags, accessPointProperties, "WpaFlags");
 	QS_DBUS_PROPERTY_BINDING(NMAccessPoint, pRsnFlags, bRsnFlags, accessPointProperties, "RsnFlags");
 	QS_DBUS_PROPERTY_BINDING(NMAccessPoint, pMode, bMode, accessPointProperties, "Mode");
+	QS_DBUS_PROPERTY_BINDING(NMAccessPoint, pFrequency, bFrequency, accessPointProperties, "Frequency");
+	QS_DBUS_PROPERTY_BINDING(NMAccessPoint, pHwAddress, bHwAddress, accessPointProperties, "HwAddress");
+	QS_DBUS_PROPERTY_BINDING(NMAccessPoint, pMaxBitrate, bMaxBitrate, accessPointProperties, "MaxBitrate");
 	// clang-format on
 
 	DBusNMAccessPointProxy* proxy = nullptr;

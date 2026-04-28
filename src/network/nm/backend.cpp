@@ -179,6 +179,7 @@ void NetworkManager::registerFrontendDevice(NMDeviceType::Enum type, NMDevice* d
 		};
 		// clang-format off
 		frontendWifiDev->bindableMode().setBinding(translateMode);
+		frontendWifiDev->bindableBitrate().setBinding([wifiDev]() { return wifiDev->bitrate(); });
 		wifiDev->bindableScanning().setBinding([frontendWifiDev]() { return frontendWifiDev->scannerEnabled(); });
 		QObject::connect(wifiDev, &NMWirelessDevice::networkAdded, frontendWifiDev, &WifiDevice::networkAdded);
 		QObject::connect(wifiDev, &NMWirelessDevice::networkRemoved, frontendWifiDev, &WifiDevice::networkRemoved);

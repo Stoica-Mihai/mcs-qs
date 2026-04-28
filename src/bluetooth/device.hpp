@@ -99,6 +99,24 @@ class BluetoothDevice: public QObject {
 	Q_PROPERTY(bool batteryAvailable READ batteryAvailable NOTIFY batteryAvailableChanged);
 	/// Battery level of the connected device, from `0.0` to `1.0`. Only valid if @@batteryAvailable is true.
 	Q_PROPERTY(qreal battery READ default NOTIFY batteryChanged BINDABLE bindableBattery);
+	/// Received Signal Strength Indicator from the most recent advertisement, in dBm. 0 if unknown
+	/// (typical for paired devices once connected — RSSI is mainly useful during discovery).
+	Q_PROPERTY(qint16 rssi READ default NOTIFY rssiChanged BINDABLE bindableRssi);
+	/// Advertised transmit power in dBm. 0 if unknown.
+	Q_PROPERTY(qint16 txPower READ default NOTIFY txPowerChanged BINDABLE bindableTxPower);
+	/// Service UUIDs the device advertises. Useful to tell apart audio (A2DP/HFP), input (HID),
+	/// and other profile types without round-tripping through the icon string.
+	Q_PROPERTY(QStringList uuids READ default NOTIFY uuidsChanged BINDABLE bindableUuids);
+	/// Raw 24-bit Bluetooth Class-of-Device value. 0 if unknown.
+	Q_PROPERTY(quint32 bluetoothClass READ default NOTIFY bluetoothClassChanged BINDABLE bindableBluetoothClass);
+	/// BLE appearance value (0 if unknown). See the Bluetooth assigned numbers spec for decoded categories.
+	Q_PROPERTY(quint16 appearance READ default NOTIFY appearanceChanged BINDABLE bindableAppearance);
+	/// Linux modalias string (e.g. `usb:v1234p5678d0001`), if the device exposes one.
+	Q_PROPERTY(QString modalias READ default NOTIFY modaliasChanged BINDABLE bindableModalias);
+	/// True if the device only supports legacy pairing (no SSP).
+	Q_PROPERTY(bool legacyPairing READ default NOTIFY legacyPairingChanged BINDABLE bindableLegacyPairing);
+	/// True once GATT/SDP service discovery has completed for this connection.
+	Q_PROPERTY(bool servicesResolved READ default NOTIFY servicesResolvedChanged BINDABLE bindableServicesResolved);
 	/// The Bluetooth adapter this device belongs to.
 	Q_PROPERTY(BluetoothAdapter* adapter READ adapter NOTIFY adapterChanged);
 	/// DBus path of the device under the `org.bluez` system service.
@@ -159,6 +177,14 @@ public:
 	[[nodiscard]] QBindable<QString> bindableIcon() { return &this->bIcon; }
 	[[nodiscard]] QBindable<qreal> bindableBattery() { return &this->bBattery; }
 	[[nodiscard]] QBindable<BluetoothDeviceState::Enum> bindableState() { return &this->bState; }
+	[[nodiscard]] QBindable<qint16> bindableRssi() { return &this->bRssi; }
+	[[nodiscard]] QBindable<qint16> bindableTxPower() { return &this->bTxPower; }
+	[[nodiscard]] QBindable<QStringList> bindableUuids() { return &this->bUuids; }
+	[[nodiscard]] QBindable<quint32> bindableBluetoothClass() { return &this->bBluetoothClass; }
+	[[nodiscard]] QBindable<quint16> bindableAppearance() { return &this->bAppearance; }
+	[[nodiscard]] QBindable<QString> bindableModalias() { return &this->bModalias; }
+	[[nodiscard]] QBindable<bool> bindableLegacyPairing() { return &this->bLegacyPairing; }
+	[[nodiscard]] QBindable<bool> bindableServicesResolved() { return &this->bServicesResolved; }
 
 	void addInterface(const QString& interface, const QVariantMap& properties);
 	void removeInterface(const QString& interface);
@@ -179,6 +205,14 @@ signals:
 	void batteryAvailableChanged();
 	void batteryChanged();
 	void adapterChanged();
+	void rssiChanged();
+	void txPowerChanged();
+	void uuidsChanged();
+	void bluetoothClassChanged();
+	void appearanceChanged();
+	void modaliasChanged();
+	void legacyPairingChanged();
+	void servicesResolvedChanged();
 
 private:
 	void onConnectedChanged();
@@ -201,6 +235,14 @@ private:
 	Q_OBJECT_BINDABLE_PROPERTY(BluetoothDevice, qreal, bBattery, &BluetoothDevice::batteryChanged);
 	Q_OBJECT_BINDABLE_PROPERTY(BluetoothDevice, BluetoothDeviceState::Enum, bState, &BluetoothDevice::stateChanged);
 	Q_OBJECT_BINDABLE_PROPERTY(BluetoothDevice, bool, bPairing, &BluetoothDevice::pairingChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(BluetoothDevice, qint16, bRssi, &BluetoothDevice::rssiChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(BluetoothDevice, qint16, bTxPower, &BluetoothDevice::txPowerChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(BluetoothDevice, QStringList, bUuids, &BluetoothDevice::uuidsChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(BluetoothDevice, quint32, bBluetoothClass, &BluetoothDevice::bluetoothClassChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(BluetoothDevice, quint16, bAppearance, &BluetoothDevice::appearanceChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(BluetoothDevice, QString, bModalias, &BluetoothDevice::modaliasChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(BluetoothDevice, bool, bLegacyPairing, &BluetoothDevice::legacyPairingChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(BluetoothDevice, bool, bServicesResolved, &BluetoothDevice::servicesResolvedChanged);
 
 	QS_DBUS_BINDABLE_PROPERTY_GROUP(BluetoothDevice, properties);
 	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pAddress, bAddress, properties, "Address");
@@ -214,6 +256,14 @@ private:
 	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pWakeAllowed, bWakeAllowed, properties, "WakeAllowed");
 	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pIcon, bIcon, properties, "Icon");
 	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pAdapterPath, bAdapterPath, properties, "Adapter");
+	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pRssi, bRssi, properties, "RSSI");
+	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pTxPower, bTxPower, properties, "TxPower");
+	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pUuids, bUuids, properties, "UUIDs");
+	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pBluetoothClass, bBluetoothClass, properties, "Class");
+	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pAppearance, bAppearance, properties, "Appearance");
+	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pModalias, bModalias, properties, "Modalias");
+	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pLegacyPairing, bLegacyPairing, properties, "LegacyPairing");
+	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, pServicesResolved, bServicesResolved, properties, "ServicesResolved");
 
 	QS_DBUS_BINDABLE_PROPERTY_GROUP(BluetoothDevice, batteryProperties);
 	QS_DBUS_PROPERTY_BINDING(BluetoothDevice, BatteryPercentage, pBattery, bBattery, batteryProperties, "Percentage", true);

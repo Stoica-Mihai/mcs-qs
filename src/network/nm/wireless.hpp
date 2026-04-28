@@ -58,6 +58,9 @@ public:
 	[[nodiscard]] QList<NMAccessPoint*> accessPoints() const { return this->mAccessPoints.values(); }
 	[[nodiscard]] QList<NMSettings*> settings() const { return this->mSettings.values(); }
 	[[nodiscard]] NMSettings* referenceSettings() const { return this->mReferenceSettings; }
+	[[nodiscard]] quint32 frequency() const { return this->bFrequency; }
+	[[nodiscard]] QString bssid() const { return this->bBssid; }
+	[[nodiscard]] quint32 maxBitrate() const { return this->bMaxBitrate; }
 	QBindable<QString> bindableActiveApPath() { return &this->bActiveApPath; }
 	QBindable<bool> bindableVisible() { return &this->bVisible; }
 	bool visible() const { return this->bVisible; }
@@ -76,6 +79,9 @@ signals:
 	void deviceFailReasonChanged(NMDeviceStateReason::Enum reason);
 	void capabilitiesChanged(NMWirelessCapabilities::Enum caps);
 	void activeApPathChanged(QString path);
+	void frequencyChanged(quint32 frequency);
+	void bssidChanged(const QString& bssid);
+	void maxBitrateChanged(quint32 maxBitrate);
 
 private:
 	void updateReferenceAp();
@@ -97,6 +103,9 @@ private:
 	Q_OBJECT_BINDABLE_PROPERTY(NMWirelessNetwork, NMDeviceStateReason::Enum, bDeviceFailReason, &NMWirelessNetwork::deviceFailReasonChanged);
 	Q_OBJECT_BINDABLE_PROPERTY(NMWirelessNetwork, quint8, bSignalStrength, &NMWirelessNetwork::signalStrengthChanged);
 	Q_OBJECT_BINDABLE_PROPERTY(NMWirelessNetwork, QString, bActiveApPath, &NMWirelessNetwork::activeApPathChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(NMWirelessNetwork, quint32, bFrequency, &NMWirelessNetwork::frequencyChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(NMWirelessNetwork, QString, bBssid, &NMWirelessNetwork::bssidChanged);
+	Q_OBJECT_BINDABLE_PROPERTY(NMWirelessNetwork, quint32, bMaxBitrate, &NMWirelessNetwork::maxBitrateChanged);
 	// clang-format on
 };
 
@@ -113,7 +122,9 @@ public:
 	[[nodiscard]] NMWirelessCapabilities::Enum capabilities() { return this->bCapabilities; }
 	[[nodiscard]] const QDBusObjectPath& activeApPath() { return this->bActiveAccessPoint; }
 	[[nodiscard]] NM80211Mode::Enum mode() { return this->bMode; }
+	[[nodiscard]] quint32 bitrate() { return this->bBitrate; }
 	[[nodiscard]] QBindable<bool> bindableScanning() { return &this->bScanning; }
+	[[nodiscard]] QBindable<quint32> bindableBitrate() { return &this->bBitrate; }
 
 signals:
 	void accessPointLoaded(NMAccessPoint* ap);
@@ -125,6 +136,7 @@ signals:
 	void capabilitiesChanged(NMWirelessCapabilities::Enum caps);
 	void activeAccessPointChanged(const QDBusObjectPath& path);
 	void modeChanged(NM80211Mode::Enum mode);
+	void bitrateChanged(quint32 bitrate);
 
 private slots:
 	void onAccessPointAdded(const QDBusObjectPath& path);
@@ -159,12 +171,14 @@ private:
 	Q_OBJECT_BINDABLE_PROPERTY(NMWirelessDevice, NMWirelessCapabilities::Enum, bCapabilities, &NMWirelessDevice::capabilitiesChanged);
 	Q_OBJECT_BINDABLE_PROPERTY(NMWirelessDevice, QDBusObjectPath, bActiveAccessPoint, &NMWirelessDevice::activeAccessPointChanged);
 	Q_OBJECT_BINDABLE_PROPERTY(NMWirelessDevice, NM80211Mode::Enum, bMode, &NMWirelessDevice::modeChanged);
-	
+	Q_OBJECT_BINDABLE_PROPERTY(NMWirelessDevice, quint32, bBitrate, &NMWirelessDevice::bitrateChanged);
+
 	QS_DBUS_BINDABLE_PROPERTY_GROUP(NMWireless, wirelessProperties);
 	QS_DBUS_PROPERTY_BINDING(NMWirelessDevice, pLastScan, bLastScan, wirelessProperties, "LastScan");
 	QS_DBUS_PROPERTY_BINDING(NMWirelessDevice, pCapabilities, bCapabilities, wirelessProperties, "WirelessCapabilities");
 	QS_DBUS_PROPERTY_BINDING(NMWirelessDevice, pActiveAccessPoint, bActiveAccessPoint, wirelessProperties, "ActiveAccessPoint");
 	QS_DBUS_PROPERTY_BINDING(NMWirelessDevice, pMode, bMode, wirelessProperties, "Mode");
+	QS_DBUS_PROPERTY_BINDING(NMWirelessDevice, pBitrate, bBitrate, wirelessProperties, "Bitrate");
 	// clang-format on
 
 	DBusNMWirelessProxy* wirelessProxy = nullptr;
