@@ -149,10 +149,11 @@ void DBusIpcHandler::enumerateMethods() {
 		}
 		if (!typesOk) continue;
 
-		// Map return type. Empty == void on the bus.
+		// Map return type. Empty == void on the bus. QML wraps void-returning
+		// functions as QVariant at the metaobject level, so treat that as void.
 		auto returnType = method.returnType();
 		QByteArray outSig;
-		if (returnType != QMetaType::Void) {
+		if (returnType != QMetaType::Void && returnType != QMetaType::QVariant) {
 			outSig = dbusSignatureFor(returnType);
 			if (outSig.isEmpty()) {
 				qCWarning(logDBusIpc) << "DBusIpcHandler" << this << ": skipping method"
