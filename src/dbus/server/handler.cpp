@@ -21,21 +21,40 @@ namespace qs::dbus::server {
 namespace {
 QS_LOGGING_CATEGORY(logDBusIpc, "quickshell.dbus.ipc", QtWarningMsg);
 
-// Map a Qt meta-type to a D-Bus single-value signature byte. Returns an empty
-// QByteArray if the type can't be expressed on the bus.
+// Single source of truth for cross-IPC primitive types: D-Bus signature
+// + (where defined) the SignalRelay slot that accepts the same value.
+// Containers (QStringList, QVariantMap) are added inline at use sites
+// because they don't fit the single-arg signal relay shape.
+struct PrimitiveTypeMap {
+	int typeId;
+	const char* signature;
+	const char* relaySlot; // nullptr → not supported as a single-arg signal
+};
+
+constexpr PrimitiveTypeMap kPrimitiveTypes[] = {
+    {QMetaType::QString,   "s", "onString(QString)"},
+    {QMetaType::Int,       "i", "onInt(int)"},
+    {QMetaType::UInt,      "u", nullptr},
+    {QMetaType::LongLong,  "x", nullptr},
+    {QMetaType::ULongLong, "t", nullptr},
+    {QMetaType::Bool,      "b", "onBool(bool)"},
+    {QMetaType::Double,    "d", "onDouble(double)"},
+    {QMetaType::Float,     "d", "onDouble(double)"}, // widens on the bus
+};
+
 QByteArray dbusSignatureFor(int typeId) {
-	switch (typeId) {
-	case QMetaType::Void: return {};
-	case QMetaType::QString: return "s";
-	case QMetaType::Int: return "i";
-	case QMetaType::UInt: return "u";
-	case QMetaType::LongLong: return "x";
-	case QMetaType::ULongLong: return "t";
-	case QMetaType::Bool: return "b";
-	case QMetaType::Double: return "d";
-	case QMetaType::Float: return "d"; // float widens to double on the bus
-	default: return {};
+	if (typeId == QMetaType::Void) return {};
+	for (const auto& t: kPrimitiveTypes) {
+		if (t.typeId == typeId) return t.signature;
 	}
+	return {};
+}
+
+const char* relaySlotFor(int typeId) {
+	for (const auto& t: kPrimitiveTypes) {
+		if (t.typeId == typeId) return t.relaySlot;
+	}
+	return nullptr;
 }
 
 // Pascal-case the QML method name so D-Bus consumers see a conventional name.
@@ -129,22 +148,21 @@ class DBusIpcHandler::SignalRelay: public QObject {
 public:
 	SignalRelay(DBusIpcHandler* handler, const SignalEntry& entry)
 	    : QObject(handler), handler(handler), signalEntry(entry) {
-		const char* slotSig = nullptr;
-		const auto& sig = entry.signature;
-		if (sig.isEmpty())   slotSig = "onVoid()";
-		else if (sig == "s") slotSig = "onString(QString)";
-		else if (sig == "i") slotSig = "onInt(int)";
-		else if (sig == "b") slotSig = "onBool(bool)";
-		else if (sig == "d") slotSig = "onDouble(double)";
-		else { qCWarning(logDBusIpc) << "SignalRelay: unsupported signature" << sig; return; }
-
+		const char* slotSig = entry.signature.isEmpty()
+		    ? "onVoid()"
+		    : relaySlotFor(entry.signal.parameterType(0));
+		if (slotSig == nullptr) {
+			qCWarning(logDBusIpc) << "SignalRelay: unsupported signal arg type"
+			                      << entry.signal.parameterTypeName(0);
+			return;
+		}
 		const auto& mo = SignalRelay::staticMetaObject;
 		auto slot = mo.method(mo.indexOfSlot(slotSig));
 		QObject::connect(handler, entry.signal, this, slot);
 	}
 
 	SignalRelay(DBusIpcHandler* handler, const PropertyEntry& entry)
-	    : QObject(handler), handler(handler), propertyEntry(entry), isProperty(true) {
+	    : QObject(handler), handler(handler), propertyEntry(entry) {
 		const auto& mo = SignalRelay::staticMetaObject;
 		auto slot = mo.method(mo.indexOfSlot("onPropertyNotify()"));
 		QObject::connect(handler, entry.property.notifySignal(), this, slot);
@@ -164,15 +182,13 @@ private:
 	DBusIpcHandler* handler;
 	SignalEntry signalEntry;
 	PropertyEntry propertyEntry;
-	bool isProperty = false;
 };
 
 void DBusIpcHandler::emitSignalRaw(const SignalEntry& entry, const QVariant& arg) {
 	if (!this->mRegistered) return;
-	auto bus = QDBusConnection::sessionBus();
 	auto msg = QDBusMessage::createSignal(this->mPath, this->mIface, entry.dbusName);
-	if (!entry.signature.isEmpty() && arg.isValid()) msg << arg;
-	bus.send(msg);
+	if (!entry.signature.isEmpty()) msg << arg;
+	QDBusConnection::sessionBus().send(msg);
 }
 
 void DBusIpcHandler::emitPropertyChanged(
@@ -206,12 +222,15 @@ void DBusIpcHandler::enumerateMembers() {
 	for (auto i = methodOffset; i < mo->methodCount(); ++i) {
 		auto method = mo->method(i);
 
-		// Signals — capture a per-signal entry and connect via SignalRelay.
 		if (method.methodType() == QMetaMethod::Signal) {
+			if (method.parameterCount() > 1) {
+				qCWarning(logDBusIpc) << "DBusIpcHandler" << this << ": skipping signal"
+				                      << method.name()
+				                      << "— only zero- or one-arg signals are supported";
+				continue;
+			}
 			QByteArray sig;
-			if (method.parameterCount() == 0) {
-				// no args
-			} else if (method.parameterCount() == 1) {
+			if (method.parameterCount() == 1) {
 				sig = dbusSignatureFor(method.parameterType(0));
 				if (sig.isEmpty()) {
 					qCWarning(logDBusIpc) << "DBusIpcHandler" << this << ": skipping signal"
@@ -219,11 +238,6 @@ void DBusIpcHandler::enumerateMembers() {
 					                      << method.parameterTypeName(0);
 					continue;
 				}
-			} else {
-				qCWarning(logDBusIpc) << "DBusIpcHandler" << this << ": skipping signal"
-				                      << method.name()
-				                      << "— only zero- or one-arg signals are supported";
-				continue;
 			}
 
 			SignalEntry entry;
@@ -234,7 +248,6 @@ void DBusIpcHandler::enumerateMembers() {
 			continue;
 		}
 
-		// Methods (Q_INVOKABLE / public-slot user-declared).
 		if (method.methodType() != QMetaMethod::Method
 		    && method.methodType() != QMetaMethod::Slot)
 		{
@@ -282,7 +295,6 @@ void DBusIpcHandler::enumerateMembers() {
 		this->methods.insert(dbusName, entry);
 	}
 
-	// Properties — only those declared after our base metaobject offset.
 	for (auto i = propertyOffset; i < mo->propertyCount(); ++i) {
 		auto prop = mo->property(i);
 		auto sig = dbusSignatureFor(prop.metaType().id());
@@ -304,19 +316,12 @@ void DBusIpcHandler::enumerateMembers() {
 		this->properties.insert(entry.dbusName, entry);
 	}
 
-	// Wire signal relays after both methods + signals are known.
 	for (auto& entry: this->signals_) {
-		auto* relay = new SignalRelay(this, entry);
-		this->signalRelays.append(relay);
+		this->signalRelays.append(new SignalRelay(this, entry));
 	}
-
-	// Connect property-notify signals to PropertiesChanged emission via
-	// a per-property SignalRelay configured in property mode (no D-Bus
-	// signal name; the relay just calls back into emitPropertyChanged).
 	for (auto& entry: this->properties) {
 		if (!entry.property.hasNotifySignal()) continue;
-		auto* relay = new SignalRelay(this, entry);
-		this->signalRelays.append(relay);
+		this->signalRelays.append(new SignalRelay(this, entry));
 	}
 
 	qCDebug(logDBusIpc) << "DBusIpcHandler" << this << "enumerated"
@@ -489,13 +494,18 @@ bool DBusIpcHandler::dispatchCall(
 		}
 		if (member == "GetAll" && args.size() == 1) {
 			auto requestedIface = args.at(0).toString();
+			if (requestedIface != this->mIface) {
+				connection.send(message.createErrorReply(
+				    QDBusError::UnknownInterface,
+				    QString("No such interface: %1").arg(requestedIface)
+				));
+				return true;
+			}
 			QVariantMap out;
-			if (requestedIface == this->mIface) {
-				for (auto it = this->properties.constBegin();
-				     it != this->properties.constEnd(); ++it)
-				{
-					out.insert(it->dbusName, it->property.read(this));
-				}
+			for (auto it = this->properties.constBegin();
+			     it != this->properties.constEnd(); ++it)
+			{
+				out.insert(it->dbusName, it->property.read(this));
 			}
 			connection.send(message.createReply(QVariant::fromValue(out)));
 			return true;
