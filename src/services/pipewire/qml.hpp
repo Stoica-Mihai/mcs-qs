@@ -155,7 +155,7 @@ public:
 	/// back if the active card's profile can't honor the requested rate.
 	///
 	/// Replaces shelling out to `pw-metadata -n settings 0 clock.force-rate`.
-	Q_INVOKABLE static void setForceRate(qint32 rate);
+	Q_INVOKABLE void setForceRate(qint32 rate);
 
 signals:
 	void defaultAudioSinkChanged();
@@ -173,11 +173,16 @@ private slots:
 	void onLinkRemoved(QObject* object);
 	void onLinkGroupAdded(PwLinkGroup* group);
 	void onLinkGroupRemoved(QObject* object);
+	void onMetadataAdded(PwMetadata* metadata);
 
 private:
 	ObjectModel<PwNodeIface> mNodes {this};
 	ObjectModel<PwLinkIface> mLinks {this};
 	ObjectModel<PwLinkGroupIface> mLinkGroups {this};
+	// Pinned ref on the global "settings" metadata. Holding it keeps the
+	// proxy bound so setForceRate() can write properties without racing
+	// against bind/unbind cycles.
+	PwBindableRef<PwMetadata> mSettingsMetadata;
 };
 
 ///! Tracks non-monitor link connections to a given node.

@@ -101,6 +101,25 @@ Pipewire::Pipewire(QObject* parent): QObject(parent) {
 
 	QObject::connect(&connection->registry, &PwRegistry::initialized, this, &Pipewire::readyChanged);
 	QObject::connect(&connection->registry, &PwRegistry::cleared, this, &Pipewire::readyChanged);
+
+	// Catch the "settings" metadata so setForceRate() finds it bound.
+	for (auto* meta: connection->registry.metadata.values()) {
+		this->onMetadataAdded(meta);
+	}
+
+	QObject::connect(
+	    &connection->registry,
+	    &PwRegistry::metadataAdded,
+	    this,
+	    &Pipewire::onMetadataAdded
+	);
+}
+
+void Pipewire::onMetadataAdded(PwMetadata* metadata) {
+	if (metadata == nullptr) return;
+	if (metadata->name() != QStringLiteral("settings")) return;
+	if (this->mSettingsMetadata.object() != nullptr) return;
+	this->mSettingsMetadata.setObject(metadata);
 }
 
 ObjectModel<PwNodeIface>* Pipewire::nodes() { return &this->mNodes; }
@@ -173,14 +192,13 @@ void Pipewire::setDefaultConfiguredAudioSource(PwNodeIface* node) {
 bool Pipewire::isReady() { return PwConnection::instance()->registry.isInitialized(); }
 
 void Pipewire::setForceRate(qint32 rate) {
-	auto& metas = PwConnection::instance()->registry.metadata;
-	for (auto* meta: metas) {
-		if (meta == nullptr || meta->name() != QStringLiteral("settings")) continue;
-		const auto value = QByteArray::number(rate);
-		meta->setProperty("clock.force-rate", "Spa:Int", value.constData());
+	auto* meta = this->mSettingsMetadata.object();
+	if (meta == nullptr) {
+		qWarning() << "Pipewire.setForceRate: settings metadata not yet available";
 		return;
 	}
-	qWarning() << "Pipewire.setForceRate: settings metadata not yet available";
+	const auto value = QByteArray::number(rate);
+	meta->setProperty("clock.force-rate", "Spa:Int", value.constData());
 }
 
 PwNodeIface* PwNodeLinkTracker::node() const { return this->mNode; }
