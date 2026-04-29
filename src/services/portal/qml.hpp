@@ -2,52 +2,63 @@
 
 #include <qobject.h>
 #include <qqmlintegration.h>
-#include <qstring.h>
 #include <qtmetamacros.h>
 
 #include "screenshot.hpp"
+#include "wallpaper.hpp"
 
 namespace qs::service::portal {
 
 ///! xdg-desktop-portal Screenshot backend.
 ///
-/// Registers `org.freedesktop.impl.portal.desktop.mcshell` on the session
-/// bus and serves the `org.freedesktop.impl.portal.Screenshot` interface.
-/// When apps invoke the user-facing `org.freedesktop.portal.Screenshot`,
-/// xdg-desktop-portal routes the call to whichever backend the active
-/// portal config selects — see `mcshell.portal` (installed to
+/// Registers as `org.freedesktop.impl.portal.desktop.mcshell` on the
+/// session bus and serves `org.freedesktop.impl.portal.Screenshot` at
+/// `/org/freedesktop/portal/desktop`. xdg-desktop-portal routes app
+/// screenshot requests here when the active portal config selects
+/// mcshell — see `mcshell.portal` (installed to
 /// `/usr/share/xdg-desktop-portal/portals/`) for the matching declaration.
 ///
 /// Listen for `requestReceived` and respond on the supplied
-/// @@ScreenshotPortalRequest. If the request is interactive, render a UI;
-/// otherwise capture immediately. Either way, call `respondWithFile(uri)`
-/// (success), `cancel()` (user cancelled), or `fail()` (capture failed)
+/// @@ScreenshotPortalRequest with respondWithFile(uri) / cancel() / fail()
 /// to release the bus reply.
 class ScreenshotPortal: public QObject {
 	Q_OBJECT;
 	QML_NAMED_ELEMENT(ScreenshotPortal);
 	QML_SINGLETON;
 
-	Q_PROPERTY(bool registered READ registered NOTIFY registeredChanged);
-
 public:
 	explicit ScreenshotPortal(QObject* parent = nullptr);
 
-	[[nodiscard]] bool registered() const { return this->mRegistered; }
-
 signals:
-	void registeredChanged();
 	/// Emitted whenever xdg-desktop-portal asks our backend to capture a
-	/// screenshot. Answer the request via one of its respond/cancel/fail
-	/// invokables to release the bus reply.
+	/// screenshot.
 	void requestReceived(qs::service::portal::ScreenshotPortalRequest* request);
 
 private:
-	void tryRegister();
-
-	bool mRegistered = false;
 	ScreenshotImpl* impl = nullptr;
 	friend class ScreenshotImpl;
+};
+
+///! xdg-desktop-portal Wallpaper backend.
+///
+/// Implements `org.freedesktop.impl.portal.Wallpaper` so apps can request
+/// wallpaper changes via the portal API. Listen for `wallpaperRequested`
+/// and call approve/cancel/fail on the supplied @@WallpaperPortalRequest
+/// once the change is applied (or the user cancels the preview).
+class WallpaperPortal: public QObject {
+	Q_OBJECT;
+	QML_NAMED_ELEMENT(WallpaperPortal);
+	QML_SINGLETON;
+
+public:
+	explicit WallpaperPortal(QObject* parent = nullptr);
+
+signals:
+	void wallpaperRequested(qs::service::portal::WallpaperPortalRequest* request);
+
+private:
+	WallpaperImpl* impl = nullptr;
+	friend class WallpaperImpl;
 };
 
 } // namespace qs::service::portal

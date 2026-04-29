@@ -1,5 +1,6 @@
 #pragma once
 
+#include <qdbusabstractadaptor.h>
 #include <qdbuscontext.h>
 #include <qdbusextratypes.h>
 #include <qdbusmessage.h>
@@ -81,7 +82,7 @@ private:
 };
 
 class ScreenshotImpl
-    : public QObject
+    : public QDBusAbstractAdaptor
     , public QDBusContext {
 	Q_OBJECT;
 	Q_CLASSINFO("D-Bus Interface", "org.freedesktop.impl.portal.Screenshot");
@@ -89,7 +90,7 @@ class ScreenshotImpl
 	Q_PROPERTY(quint32 version READ version CONSTANT);
 
 public:
-	explicit ScreenshotImpl(ScreenshotPortal* parent);
+	explicit ScreenshotImpl(QObject* parent, ScreenshotPortal* portal);
 
 	[[nodiscard]] quint32 version() const { return 2; }
 

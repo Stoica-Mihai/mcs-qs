@@ -11,6 +11,7 @@
 #include <qvariant.h>
 
 #include "../../core/logcat.hpp"
+#include "backend.hpp"
 #include "qml.hpp"
 
 namespace qs::service::portal {
@@ -58,7 +59,8 @@ void ScreenshotPortalRequest::fail() { this->sendResponse(2, {}); }
 
 // ── Screenshot interface ─────────────────────────────────────────
 
-ScreenshotImpl::ScreenshotImpl(ScreenshotPortal* parent): QObject(parent), portal(parent) {}
+ScreenshotImpl::ScreenshotImpl(QObject* parent, ScreenshotPortal* portal)
+    : QDBusAbstractAdaptor(parent), portal(portal) {}
 
 void ScreenshotImpl::Screenshot(
     const QDBusObjectPath& /*handle*/,
@@ -102,37 +104,9 @@ void ScreenshotImpl::PickColor(
 // ── ScreenshotPortal singleton ───────────────────────────────────
 
 ScreenshotPortal::ScreenshotPortal(QObject* parent): QObject(parent) {
-	this->impl = new ScreenshotImpl(this);
-	this->tryRegister();
-}
-
-void ScreenshotPortal::tryRegister() {
-	auto bus = QDBusConnection::sessionBus();
-	if (!bus.isConnected()) {
-		qCWarning(logPortal) << "session bus not connected; portal disabled";
-		return;
-	}
-
-	if (!bus.registerService("org.freedesktop.impl.portal.desktop.mcshell")) {
-		qCWarning(logPortal) << "could not claim portal service name; another"
-		                     << "backend may already be installed";
-		return;
-	}
-
-	if (!bus.registerObject(
-	        "/org/freedesktop/portal/desktop",
-	        this->impl,
-	        QDBusConnection::ExportAllSlots | QDBusConnection::ExportAllProperties
-	))
-	{
-		qCWarning(logPortal) << "could not register Screenshot impl object";
-		bus.unregisterService("org.freedesktop.impl.portal.desktop.mcshell");
-		return;
-	}
-
-	this->mRegistered = true;
-	emit this->registeredChanged();
-	qCInfo(logPortal) << "Screenshot portal backend registered";
+	// Adaptor attaches to the shared backend host so all impl-portal
+	// interfaces share a single registerObject at /org/freedesktop/portal/desktop.
+	this->impl = new ScreenshotImpl(PortalBackend::instance(), this);
 }
 
 } // namespace qs::service::portal
