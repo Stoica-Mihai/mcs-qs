@@ -42,7 +42,10 @@ private:
 /// the session bus can then invoke them (e.g. `busctl --user call`).
 ///
 /// Currently supported argument / return types: `string`, `int`, `bool`,
-/// `real`, `void`. Signals and properties are not yet exposed (planned).
+/// `real`, `void`, `string[]` (as `QStringList`), and `var` (as `QVariantMap`).
+/// Signals (zero or one arg of a basic type) are also exposed; user-declared
+/// Q_PROPERTYs are published via the standard `org.freedesktop.DBus.Properties`
+/// interface and emit `PropertiesChanged` on their notify signal.
 ///
 /// ### Example
 /// ```qml
@@ -110,6 +113,11 @@ signals:
 	void registeredChanged();
 
 private:
+	// Internal helper — a typed per-signal listener subclassed so QObject's
+	// signal-slot machinery can deliver arbitrary signal arguments by
+	// matching slot signature.
+	class SignalRelay;
+
 	struct MethodEntry {
 		QMetaMethod method;
 		QString dbusName;        // PascalCase D-Bus name
@@ -117,9 +125,26 @@ private:
 		QByteArray outSignature; // "" for void, "s"/"i"/etc for single return
 	};
 
-	void enumerateMethods();
+	struct PropertyEntry {
+		QMetaProperty property;
+		QString dbusName;
+		QByteArray signature;
+	};
+
+	struct SignalEntry {
+		QMetaMethod signal;
+		QString dbusName;
+		QByteArray signature; // 0 or 1 chars
+	};
+
+	void enumerateMembers();
 	void tryRegister();
 	void unregister();
+	void emitPropertyChanged(const PropertyEntry& entry, const QVariant& value);
+	void emitSignalRaw(const SignalEntry& entry, const QVariant& arg);
+
+	friend class SignalRelay;
+	friend class DBusIpcVirtualObject;
 
 	bool mEnabled = true;
 	bool mRegistered = false;
@@ -127,8 +152,11 @@ private:
 	QString mPath = "/";
 	QString mIface;
 
-	// Resolved method registry, keyed by D-Bus name.
+	// Resolved registries, keyed by D-Bus name.
 	QHash<QString, MethodEntry> methods;
+	QHash<QString, PropertyEntry> properties;
+	QHash<QString, SignalEntry> signals_;
+	QList<SignalRelay*> signalRelays;
 
 	DBusIpcVirtualObject* virtualObject = nullptr;
 };

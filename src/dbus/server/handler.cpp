@@ -2,6 +2,7 @@
 
 #include <qcoreapplication.h>
 #include <qdbusconnection.h>
+#include <qdbusextratypes.h>
 #include <qdbusmessage.h>
 #include <qlogging.h>
 #include <qloggingcategory.h>
@@ -76,7 +77,7 @@ bool DBusIpcVirtualObject::handleMessage(
 DBusIpcHandler::~DBusIpcHandler() { this->unregister(); }
 
 void DBusIpcHandler::onPostReload() {
-	this->enumerateMethods();
+	this->enumerateMembers();
 	if (this->mEnabled) this->tryRegister();
 }
 
@@ -116,17 +117,124 @@ void DBusIpcHandler::setIface(const QString& iface) {
 	if (this->mEnabled) this->tryRegister();
 }
 
-void DBusIpcHandler::enumerateMethods() {
+// ── SignalRelay ────────────────────────────────────────────────────
+// One relay per registered signal OR property-notify. Mirrors the
+// per-type-slot pattern from IpcSignalListener — Qt's signal/slot
+// system requires a slot whose signature matches the source signal,
+// so we provide one slot per supported arg type and pick the right
+// one at connect time.
+class DBusIpcHandler::SignalRelay: public QObject {
+	Q_OBJECT;
+
+public:
+	SignalRelay(DBusIpcHandler* handler, const SignalEntry& entry)
+	    : QObject(handler), handler(handler), signalEntry(entry) {
+		const char* slotSig = nullptr;
+		const auto& sig = entry.signature;
+		if (sig.isEmpty())   slotSig = "onVoid()";
+		else if (sig == "s") slotSig = "onString(QString)";
+		else if (sig == "i") slotSig = "onInt(int)";
+		else if (sig == "b") slotSig = "onBool(bool)";
+		else if (sig == "d") slotSig = "onDouble(double)";
+		else { qCWarning(logDBusIpc) << "SignalRelay: unsupported signature" << sig; return; }
+
+		const auto& mo = SignalRelay::staticMetaObject;
+		auto slot = mo.method(mo.indexOfSlot(slotSig));
+		QObject::connect(handler, entry.signal, this, slot);
+	}
+
+	SignalRelay(DBusIpcHandler* handler, const PropertyEntry& entry)
+	    : QObject(handler), handler(handler), propertyEntry(entry), isProperty(true) {
+		const auto& mo = SignalRelay::staticMetaObject;
+		auto slot = mo.method(mo.indexOfSlot("onPropertyNotify()"));
+		QObject::connect(handler, entry.property.notifySignal(), this, slot);
+	}
+
+private slots:
+	void onVoid()                   { handler->emitSignalRaw(signalEntry, QVariant()); }
+	void onString(const QString& v) { handler->emitSignalRaw(signalEntry, QVariant(v)); }
+	void onInt(int v)               { handler->emitSignalRaw(signalEntry, QVariant(v)); }
+	void onBool(bool v)             { handler->emitSignalRaw(signalEntry, QVariant(v)); }
+	void onDouble(double v)         { handler->emitSignalRaw(signalEntry, QVariant(v)); }
+	void onPropertyNotify() {
+		handler->emitPropertyChanged(propertyEntry, propertyEntry.property.read(handler));
+	}
+
+private:
+	DBusIpcHandler* handler;
+	SignalEntry signalEntry;
+	PropertyEntry propertyEntry;
+	bool isProperty = false;
+};
+
+void DBusIpcHandler::emitSignalRaw(const SignalEntry& entry, const QVariant& arg) {
+	if (!this->mRegistered) return;
+	auto bus = QDBusConnection::sessionBus();
+	auto msg = QDBusMessage::createSignal(this->mPath, this->mIface, entry.dbusName);
+	if (!entry.signature.isEmpty() && arg.isValid()) msg << arg;
+	bus.send(msg);
+}
+
+void DBusIpcHandler::emitPropertyChanged(
+    const PropertyEntry& entry,
+    const QVariant& value
+) {
+	if (!this->mRegistered) return;
+	auto bus = QDBusConnection::sessionBus();
+	auto msg = QDBusMessage::createSignal(
+	    this->mPath,
+	    "org.freedesktop.DBus.Properties",
+	    "PropertiesChanged"
+	);
+	QVariantMap changed;
+	changed.insert(entry.dbusName, value);
+	msg << this->mIface << changed << QStringList();
+	bus.send(msg);
+}
+
+void DBusIpcHandler::enumerateMembers() {
 	this->methods.clear();
+	this->properties.clear();
+	this->signals_.clear();
+	for (auto* relay: this->signalRelays) relay->deleteLater();
+	this->signalRelays.clear();
 
 	const auto* mo = this->metaObject();
-	const auto baseOffset = DBusIpcHandler::staticMetaObject.methodCount();
+	const auto methodOffset = DBusIpcHandler::staticMetaObject.methodCount();
+	const auto propertyOffset = DBusIpcHandler::staticMetaObject.propertyCount();
 
-	for (auto i = baseOffset; i < mo->methodCount(); ++i) {
+	for (auto i = methodOffset; i < mo->methodCount(); ++i) {
 		auto method = mo->method(i);
 
-		// Only Q_INVOKABLE / public-slot user-declared methods. Skip signals
-		// (handled separately in v2) and constructor-like helpers.
+		// Signals — capture a per-signal entry and connect via SignalRelay.
+		if (method.methodType() == QMetaMethod::Signal) {
+			QByteArray sig;
+			if (method.parameterCount() == 0) {
+				// no args
+			} else if (method.parameterCount() == 1) {
+				sig = dbusSignatureFor(method.parameterType(0));
+				if (sig.isEmpty()) {
+					qCWarning(logDBusIpc) << "DBusIpcHandler" << this << ": skipping signal"
+					                      << method.name() << "— unsupported argument type:"
+					                      << method.parameterTypeName(0);
+					continue;
+				}
+			} else {
+				qCWarning(logDBusIpc) << "DBusIpcHandler" << this << ": skipping signal"
+				                      << method.name()
+				                      << "— only zero- or one-arg signals are supported";
+				continue;
+			}
+
+			SignalEntry entry;
+			entry.signal = method;
+			entry.dbusName = toDBusName(QString::fromUtf8(method.name()));
+			entry.signature = sig;
+			this->signals_.insert(entry.dbusName, entry);
+			continue;
+		}
+
+		// Methods (Q_INVOKABLE / public-slot user-declared).
 		if (method.methodType() != QMetaMethod::Method
 		    && method.methodType() != QMetaMethod::Slot)
 		{
@@ -174,8 +282,47 @@ void DBusIpcHandler::enumerateMethods() {
 		this->methods.insert(dbusName, entry);
 	}
 
+	// Properties — only those declared after our base metaobject offset.
+	for (auto i = propertyOffset; i < mo->propertyCount(); ++i) {
+		auto prop = mo->property(i);
+		auto sig = dbusSignatureFor(prop.metaType().id());
+		if (sig.isEmpty()) {
+			// Containers we treat specially.
+			if (prop.metaType().id() == QMetaType::QStringList) sig = "as";
+			else if (prop.metaType().id() == QMetaType::QVariantMap) sig = "a{sv}";
+		}
+		if (sig.isEmpty()) {
+			qCWarning(logDBusIpc) << "DBusIpcHandler" << this << ": skipping property"
+			                      << prop.name() << "— unsupported type:" << prop.typeName();
+			continue;
+		}
+
+		PropertyEntry entry;
+		entry.property = prop;
+		entry.dbusName = toDBusName(QString::fromUtf8(prop.name()));
+		entry.signature = sig;
+		this->properties.insert(entry.dbusName, entry);
+	}
+
+	// Wire signal relays after both methods + signals are known.
+	for (auto& entry: this->signals_) {
+		auto* relay = new SignalRelay(this, entry);
+		this->signalRelays.append(relay);
+	}
+
+	// Connect property-notify signals to PropertiesChanged emission via
+	// a per-property SignalRelay configured in property mode (no D-Bus
+	// signal name; the relay just calls back into emitPropertyChanged).
+	for (auto& entry: this->properties) {
+		if (!entry.property.hasNotifySignal()) continue;
+		auto* relay = new SignalRelay(this, entry);
+		this->signalRelays.append(relay);
+	}
+
 	qCDebug(logDBusIpc) << "DBusIpcHandler" << this << "enumerated"
-	                    << this->methods.size() << "methods";
+	                    << this->methods.size() << "methods,"
+	                    << this->signals_.size() << "signals,"
+	                    << this->properties.size() << "properties";
 }
 
 void DBusIpcHandler::tryRegister() {
@@ -233,6 +380,26 @@ QString DBusIpcHandler::generateIntrospect() const {
 	xml += "    </method>\n";
 	xml += "  </interface>\n";
 
+	// Standard Properties interface (only emit if we have any properties).
+	if (!this->properties.isEmpty()) {
+		xml += "  <interface name=\"org.freedesktop.DBus.Properties\">\n";
+		xml += "    <method name=\"Get\">\n";
+		xml += "      <arg name=\"interface\" type=\"s\" direction=\"in\"/>\n";
+		xml += "      <arg name=\"name\" type=\"s\" direction=\"in\"/>\n";
+		xml += "      <arg name=\"value\" type=\"v\" direction=\"out\"/>\n";
+		xml += "    </method>\n";
+		xml += "    <method name=\"GetAll\">\n";
+		xml += "      <arg name=\"interface\" type=\"s\" direction=\"in\"/>\n";
+		xml += "      <arg name=\"props\" type=\"a{sv}\" direction=\"out\"/>\n";
+		xml += "    </method>\n";
+		xml += "    <signal name=\"PropertiesChanged\">\n";
+		xml += "      <arg name=\"interface\" type=\"s\"/>\n";
+		xml += "      <arg name=\"changed\" type=\"a{sv}\"/>\n";
+		xml += "      <arg name=\"invalidated\" type=\"as\"/>\n";
+		xml += "    </signal>\n";
+		xml += "  </interface>\n";
+	}
+
 	// User interface.
 	xml += "  <interface name=\"" % this->mIface % "\">\n";
 	for (auto it = this->methods.constBegin(); it != this->methods.constEnd(); ++it) {
@@ -255,6 +422,26 @@ QString DBusIpcHandler::generateIntrospect() const {
 
 		xml += "    </method>\n";
 	}
+
+	for (auto it = this->signals_.constBegin(); it != this->signals_.constEnd(); ++it) {
+		const auto& s = it.value();
+		xml += "    <signal name=\"" % s.dbusName % "\">\n";
+		if (!s.signature.isEmpty()) {
+			auto names = s.signal.parameterNames();
+			auto argName = QString::fromUtf8(names.value(0));
+			if (argName.isEmpty()) argName = "value";
+			xml += "      <arg name=\"" % argName % "\" type=\""
+			    % QString::fromUtf8(s.signature) % "\"/>\n";
+		}
+		xml += "    </signal>\n";
+	}
+
+	for (auto it = this->properties.constBegin(); it != this->properties.constEnd(); ++it) {
+		const auto& p = it.value();
+		xml += "    <property name=\"" % p.dbusName % "\" type=\""
+		    % QString::fromUtf8(p.signature) % "\" access=\"read\"/>\n";
+	}
+
 	xml += "  </interface>\n";
 
 	xml += "</node>\n";
@@ -273,6 +460,48 @@ bool DBusIpcHandler::dispatchCall(
 		auto reply = message.createReply(QVariant(this->generateIntrospect()));
 		connection.send(reply);
 		return true;
+	}
+
+	// org.freedesktop.DBus.Properties — Get / GetAll. Set is omitted in v2.
+	if (iface == "org.freedesktop.DBus.Properties") {
+		const auto args = message.arguments();
+		if (member == "Get" && args.size() == 2) {
+			auto requestedIface = args.at(0).toString();
+			auto propName = args.at(1).toString();
+			if (requestedIface != this->mIface) {
+				connection.send(message.createErrorReply(
+				    QDBusError::UnknownInterface,
+				    QString("No such interface: %1").arg(requestedIface)
+				));
+				return true;
+			}
+			auto it = this->properties.constFind(propName);
+			if (it == this->properties.constEnd()) {
+				connection.send(message.createErrorReply(
+				    QDBusError::UnknownProperty,
+				    QString("No such property: %1").arg(propName)
+				));
+				return true;
+			}
+			QDBusVariant wrapped(it->property.read(this));
+			connection.send(message.createReply(QVariant::fromValue(wrapped)));
+			return true;
+		}
+		if (member == "GetAll" && args.size() == 1) {
+			auto requestedIface = args.at(0).toString();
+			QVariantMap out;
+			if (requestedIface == this->mIface) {
+				for (auto it = this->properties.constBegin();
+				     it != this->properties.constEnd(); ++it)
+				{
+					out.insert(it->dbusName, it->property.read(this));
+				}
+			}
+			connection.send(message.createReply(QVariant::fromValue(out)));
+			return true;
+		}
+		// Set, etc — fall through to default handling.
+		return false;
 	}
 
 	if (iface != this->mIface) return false; // QtDBus will return UnknownInterface
@@ -373,3 +602,5 @@ bool DBusIpcHandler::dispatchCall(
 }
 
 } // namespace qs::dbus::server
+
+#include "handler.moc"
