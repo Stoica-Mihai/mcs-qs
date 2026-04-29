@@ -3,6 +3,7 @@ qt_add_library(quickshell-io STATIC
 	processcore.cpp
 	process.cpp
 	fileview.cpp
+	httpfetcher.cpp
 	jsonadapter.cpp
 	ipccomm.cpp
 	ipc.cpp
@@ -24,7 +25,7 @@ qt_add_qml_module(quickshell-io
 qs_add_module_deps_light(quickshell-io Quickshell)
 install_qml_module(quickshell-io)
 
-target_link_libraries(quickshell-io PRIVATE Qt::Quick quickshell-ipc)
+target_link_libraries(quickshell-io PRIVATE Qt::Quick Qt::Network quickshell-ipc)
 target_link_libraries(quickshell PRIVATE quickshell-ioplugin)
 
 qs_module_pch(quickshell-io)
