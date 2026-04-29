@@ -1,5 +1,9 @@
 #include "screencast_stream.hpp"
 
+#include <cstdint>
+#include <vector>
+
+#include <linux/dma-buf.h>
 #include <private/qwaylandshmbackingstore_p.h>
 #include <qimage.h>
 #include <qlogging.h>
@@ -7,9 +11,13 @@
 #include <qobject.h>
 #include <qpointer.h>
 #include <qscreen.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
 #include "../../core/logcat.hpp"
 #include "../../core/qmlscreen.hpp"
+#include "../../wayland/buffer/dmabuf.hpp"
 #include "../../wayland/buffer/manager.hpp"
 #include "../../wayland/buffer/shm.hpp"
 #include "../../wayland/screencopy/manager.hpp"
@@ -111,22 +119,20 @@ void ScreenCastStream::onFrameCaptured() {
 		this->initPwStream();
 	}
 
-	// Pull pixels out of the shm front buffer and shove them at the PW
-	// stream. dmabuf path is step 7 — without QS_DISABLE_DMABUF=1 the
-	// screencopy backend will hand back a dmabuf and the cast fails the
-	// type check below. Explicit warning so the limitation is visible.
-	const auto* shmBuf = dynamic_cast<const wayland::buffer::shm::WlShmBuffer*>(front);
-	if (shmBuf == nullptr) {
-		static bool warned = false;
-		if (!warned) {
-			warned = true;
-			qCWarning(logScStream) << "frontbuffer is not shm — set QS_DISABLE_DMABUF=1 "
-			                          "in the shell's environment until step 7 lands";
-		}
-	} else if (this->mPw != nullptr && this->mPw->isReady()) {
-		auto* image = shmBuf->image();
-		if (image != nullptr && !image->isNull()) {
-			this->mPw->pushFrame(image->constBits(), static_cast<int>(image->bytesPerLine()));
+	if (this->mPw != nullptr && this->mPw->isReady()) {
+		// shm: direct pointer into the mapped backing store.
+		if (const auto* shmBuf = dynamic_cast<const wayland::buffer::shm::WlShmBuffer*>(front)) {
+			if (auto* image = shmBuf->image(); image != nullptr && !image->isNull()) {
+				this->mPw->pushFrame(image->constBits(),
+				                     static_cast<int>(image->bytesPerLine()));
+			}
+		} else if (const auto* dmaBuf =
+		               dynamic_cast<const wayland::buffer::dmabuf::WlDmaBuffer*>(front)) {
+			// dmabuf: mmap the first plane (single-plane formats only —
+			// good enough for ARGB/BGRA/RGBA which is what screencopy
+			// produces). True zero-copy via dmabuf-export to PW is a
+			// follow-up; this gets us off QS_DISABLE_DMABUF=1.
+			this->pushDmabufFrame(dmaBuf);
 		}
 	}
 
@@ -134,6 +140,39 @@ void ScreenCastStream::onFrameCaptured() {
 	// backend supports. The PW consumer paces us via dropped frames if
 	// it's slower than capture.
 	this->mCapture->captureFrame();
+}
+
+void ScreenCastStream::pushDmabufFrame(const wayland::buffer::dmabuf::WlDmaBuffer* dmaBuf) {
+	if (dmaBuf == nullptr || dmaBuf->planes_() < 1) return;
+
+	auto fd = dmaBuf->planeFd(0);
+	auto stride = dmaBuf->planeStride(0);
+	auto offset = dmaBuf->planeOffset(0);
+	auto rows = static_cast<int>(dmaBuf->size().height());
+	auto totalBytes = stride * static_cast<uint32_t>(rows);
+
+	// dma-buf needs explicit cache-sync ioctls around CPU reads when the
+	// producer wrote with a GPU. Skip if the kernel/driver doesn't expose
+	// the ioctl — most consumer GPUs do.
+	dma_buf_sync sync_start { DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ };
+	ioctl(fd, DMA_BUF_IOCTL_SYNC, &sync_start); // best-effort
+
+	auto* mapped = static_cast<uint8_t*>(
+	    mmap(nullptr, offset + totalBytes, PROT_READ, MAP_SHARED, fd, 0)
+	);
+	if (mapped == MAP_FAILED) {
+		dma_buf_sync sync_end { DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ };
+		ioctl(fd, DMA_BUF_IOCTL_SYNC, &sync_end);
+		static bool warned = false;
+		if (!warned) { warned = true; qCWarning(logScStream) << "dmabuf mmap failed"; }
+		return;
+	}
+
+	this->mPw->pushFrame(mapped + offset, static_cast<int>(stride));
+
+	munmap(mapped, offset + totalBytes);
+	dma_buf_sync sync_end { DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ };
+	ioctl(fd, DMA_BUF_IOCTL_SYNC, &sync_end);
 }
 
 void ScreenCastStream::onCaptureStopped() {

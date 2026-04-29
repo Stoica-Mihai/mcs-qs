@@ -20,11 +20,14 @@ install_qml_module(quickshell-service-portal)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(pipewire REQUIRED IMPORTED_TARGET libpipewire-0.3)
+pkg_check_modules(libdrm REQUIRED IMPORTED_TARGET libdrm)
 
 target_link_libraries(quickshell-service-portal PRIVATE
 	Qt::Qml Qt::DBus Qt::Gui Qt::Quick
 	Qt::WaylandClientPrivate
 	PkgConfig::pipewire
+	PkgConfig::libdrm
+	wlp-linux-dmabuf
 )
 qs_add_link_dependencies(quickshell-service-portal
 	quickshell-dbus

@@ -163,6 +163,13 @@ public:
 	[[nodiscard]] bool isCompatible(const WlBufferRequest& request) const override;
 	[[nodiscard]] WlBufferQSGTexture* createQsgTexture(QQuickWindow* window) const override;
 
+	[[nodiscard]] uint32_t fourcc() const { return this->format; }
+	[[nodiscard]] uint64_t drmModifier() const { return this->modifier; }
+	[[nodiscard]] int planeFd(int i) const { return this->planes[i].fd; }
+	[[nodiscard]] uint32_t planeOffset(int i) const { return this->planes[i].offset; }
+	[[nodiscard]] uint32_t planeStride(int i) const { return this->planes[i].stride; }
+	[[nodiscard]] int planes_() const { return this->planeCount; }
+
 private:
 	WlDmaBuffer() noexcept = default;
 

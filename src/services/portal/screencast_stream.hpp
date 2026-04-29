@@ -10,6 +10,10 @@
 #include "../pipewire/screencast_stream.hpp"
 #include "../../wayland/screencopy/manager.hpp"
 
+namespace qs::wayland::buffer::dmabuf {
+class WlDmaBuffer;
+}
+
 namespace qs::service::portal {
 
 /// One ScreenCast source in flight. Bridges a Wayland screencopy
@@ -62,6 +66,7 @@ private slots:
 
 private:
 	void initPwStream();
+	void pushDmabufFrame(const qs::wayland::buffer::dmabuf::WlDmaBuffer* dmaBuf);
 
 	SourceKind mKind;
 	QPointer<QScreen> mScreen;
