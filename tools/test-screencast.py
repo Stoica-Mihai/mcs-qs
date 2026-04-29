@@ -29,6 +29,8 @@ def main() -> int:
     ap.add_argument("--start", action="store_true", help="also call Start")
     ap.add_argument("--hold", type=int, default=0,
                     help="seconds to keep the session open after Start")
+    ap.add_argument("--multi", action="store_true",
+                    help="ask for multi-source selection")
     args = ap.parse_args()
 
     bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
@@ -48,10 +50,10 @@ def main() -> int:
         return 1
 
     # SelectSources — this is the one that delays reply on the picker
-    print("→ SelectSources (types=Monitor, multiple=False)")
+    print(f"→ SelectSources (types=Monitor, multiple={args.multi})")
     options = {
         "types": GLib.Variant("u", 1),         # Monitor
-        "multiple": GLib.Variant("b", False),
+        "multiple": GLib.Variant("b", args.multi),
         "cursor_mode": GLib.Variant("u", 2),   # Embedded
     }
     res = bus.call_sync(

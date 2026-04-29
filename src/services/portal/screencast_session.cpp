@@ -170,12 +170,24 @@ void ScreenCastSession::maybeFinishStart() {
 	this->mStartReplyPending = false;
 
 	QList<QVariant> streamsList;
-	for (auto* s: this->mStreams) {
+	auto multi = this->mStreams.size() > 1;
+	for (qsizetype i = 0; i < this->mStreams.size(); ++i) {
+		auto* s = this->mStreams.at(i);
 		QVariantMap info;
 		info.insert(QStringLiteral("size"),
 		            QVariant::fromValue(QPoint(s->width(), s->height())));
 		info.insert(QStringLiteral("source_type"),
 		            QVariant::fromValue(static_cast<quint32>(0x1u))); // Monitor
+		// `mapping_id` correlates each stream back to a SelectSources
+		// entry when multiple were requested. xdg-desktop-portal-frontend
+		// uses this for stable per-stream identity (Chrome's display picker
+		// labels each monitor share separately, etc.).
+		if (multi) {
+			info.insert(
+			    QStringLiteral("mapping_id"),
+			    QString::number(i)
+			);
+		}
 		QVariant entry;
 		QDBusArgument arg;
 		arg.beginStructure();
