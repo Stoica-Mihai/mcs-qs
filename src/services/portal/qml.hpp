@@ -4,6 +4,7 @@
 #include <qqmlintegration.h>
 #include <qtmetamacros.h>
 
+#include "screencast.hpp"
 #include "screenshot.hpp"
 #include "wallpaper.hpp"
 
@@ -59,6 +60,28 @@ signals:
 private:
 	WallpaperImpl* impl = nullptr;
 	friend class WallpaperImpl;
+};
+
+///! xdg-desktop-portal ScreenCast backend.
+///
+/// Implements `org.freedesktop.impl.portal.ScreenCast` so apps using
+/// `xdg-desktop-portal` for screen-share (browsers, OBS, Zoom, etc.)
+/// route through mcshell instead of `xdg-desktop-portal-wlr`. Skeleton
+/// stage: the bus surface is registered (introspectable, version=4)
+/// but every method currently fails with response=2. Picker UI and
+/// real PipeWire stream wiring land in follow-up steps; see
+/// PLAN-screencast-portal.md.
+class ScreenCastPortal: public QObject {
+	Q_OBJECT;
+	QML_NAMED_ELEMENT(ScreenCastPortal);
+	QML_SINGLETON;
+
+public:
+	explicit ScreenCastPortal(QObject* parent = nullptr);
+
+private:
+	ScreenCastImpl* impl = nullptr;
+	friend class ScreenCastImpl;
 };
 
 } // namespace qs::service::portal
