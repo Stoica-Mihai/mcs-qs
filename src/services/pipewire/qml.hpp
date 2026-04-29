@@ -149,6 +149,14 @@ public:
 
 	[[nodiscard]] static bool isReady();
 
+	/// Set PipeWire's `clock.force-rate` global setting metadata. Pass
+	/// `0` (auto) to clear the override; pass a target rate (e.g. 48000,
+	/// 96000) to lock the graph to that rate. PipeWire silently falls
+	/// back if the active card's profile can't honor the requested rate.
+	///
+	/// Replaces shelling out to `pw-metadata -n settings 0 clock.force-rate`.
+	Q_INVOKABLE static void setForceRate(qint32 rate);
+
 signals:
 	void defaultAudioSinkChanged();
 	void defaultAudioSourceChanged();

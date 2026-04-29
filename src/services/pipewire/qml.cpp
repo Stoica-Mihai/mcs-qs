@@ -12,6 +12,7 @@
 #include "connection.hpp"
 #include "defaults.hpp"
 #include "link.hpp"
+#include "metadata.hpp"
 #include "node.hpp"
 #include "registry.hpp"
 
@@ -170,6 +171,17 @@ void Pipewire::setDefaultConfiguredAudioSource(PwNodeIface* node) {
 }
 
 bool Pipewire::isReady() { return PwConnection::instance()->registry.isInitialized(); }
+
+void Pipewire::setForceRate(qint32 rate) {
+	auto& metas = PwConnection::instance()->registry.metadata;
+	for (auto* meta: metas) {
+		if (meta == nullptr || meta->name() != QStringLiteral("settings")) continue;
+		const auto value = QByteArray::number(rate);
+		meta->setProperty("clock.force-rate", "Spa:Int", value.constData());
+		return;
+	}
+	qWarning() << "Pipewire.setForceRate: settings metadata not yet available";
+}
 
 PwNodeIface* PwNodeLinkTracker::node() const { return this->mNode; }
 
