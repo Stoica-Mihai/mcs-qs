@@ -2,6 +2,7 @@ qt_add_library(quickshell-service-portal STATIC
 	backend.cpp
 	qml.cpp
 	screencast.cpp
+	screencast_session.cpp
 	screenshot.cpp
 	wallpaper.cpp
 )
