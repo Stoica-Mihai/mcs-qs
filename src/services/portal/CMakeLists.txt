@@ -17,7 +17,7 @@ qs_add_module_deps_light(quickshell-service-portal Quickshell)
 
 install_qml_module(quickshell-service-portal)
 
-target_link_libraries(quickshell-service-portal PRIVATE Qt::Qml Qt::DBus)
+target_link_libraries(quickshell-service-portal PRIVATE Qt::Qml Qt::DBus Qt::Gui)
 qs_add_link_dependencies(quickshell-service-portal quickshell-dbus)
 
 target_link_libraries(quickshell PRIVATE quickshell-service-portalplugin)

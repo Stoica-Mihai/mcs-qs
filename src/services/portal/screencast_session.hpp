@@ -6,7 +6,10 @@
 #include <qhash.h>
 #include <qobject.h>
 #include <qstring.h>
+#include <qstringlist.h>
 #include <qtmetamacros.h>
+#include <qtypes.h>
+#include <utility>
 
 namespace qs::service::portal {
 
@@ -33,6 +36,13 @@ public:
 	[[nodiscard]] QString appId() const { return this->mAppId; }
 	[[nodiscard]] QDBusObjectPath sessionHandle() const { return this->mSessionHandle; }
 
+	void setSelectedSourceIds(QStringList ids) { this->mSelectedSourceIds = std::move(ids); }
+	[[nodiscard]] QStringList selectedSourceIds() const { return this->mSelectedSourceIds; }
+	void setCursorMode(quint32 mode) { this->mCursorMode = mode; }
+	[[nodiscard]] quint32 cursorMode() const { return this->mCursorMode; }
+	void setPersistMode(quint32 mode) { this->mPersistMode = mode; }
+	[[nodiscard]] quint32 persistMode() const { return this->mPersistMode; }
+
 	/// Looks up an active session by its registered object path, or nullptr.
 	static ScreenCastSession* find(const QString& sessionHandlePath);
 
@@ -56,6 +66,9 @@ private:
 	ScreenCastSessionImpl* mAdaptor = nullptr;
 	QDBusServiceWatcher* mWatcher = nullptr;
 	bool mClosed = false;
+	QStringList mSelectedSourceIds;
+	quint32 mCursorMode = 0;
+	quint32 mPersistMode = 0;
 
 	/// Map<object-path, ScreenCastSession*>. Used so SelectSources/Start can
 	/// resolve the session by handle, and so Session.Close can find its

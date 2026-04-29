@@ -79,6 +79,12 @@ class ScreenCastPortal: public QObject {
 public:
 	explicit ScreenCastPortal(QObject* parent = nullptr);
 
+signals:
+	/// Emitted when an app calls `SelectSources` and we need the user to
+	/// pick what to share. Fill in `selectedSourceIds` on the request,
+	/// then call approve() (or cancel/fail) to release the bus reply.
+	void pickerRequested(qs::service::portal::ScreenCastPickerRequest* request);
+
 private:
 	ScreenCastImpl* impl = nullptr;
 	friend class ScreenCastImpl;
