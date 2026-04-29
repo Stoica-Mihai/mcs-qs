@@ -81,7 +81,7 @@ class BluezQml: public QObject {
 	/// BlueZ pairing agent. Listen to its `requestReceived` signal to render
 	/// pin / passkey / confirmation prompts; if no consumer answers, BlueZ
 	/// will time out and reject the pairing.
-	Q_PROPERTY(qs::bluetooth::BluetoothAgent* pairingAgent READ pairingAgent CONSTANT);
+	Q_PROPERTY(BluetoothAgent* pairingAgent READ pairingAgent CONSTANT);
 	// clang-format on
 
 signals:
