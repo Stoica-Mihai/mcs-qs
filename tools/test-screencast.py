@@ -15,6 +15,7 @@ Usage:
 
 import argparse
 import sys
+import time
 from gi.repository import Gio, GLib
 
 DEST = "org.freedesktop.impl.portal.desktop.mcshell"
@@ -26,6 +27,8 @@ SESSION_IFACE = "org.freedesktop.impl.portal.Session"
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", action="store_true", help="also call Start")
+    ap.add_argument("--hold", type=int, default=0,
+                    help="seconds to keep the session open after Start")
     args = ap.parse_args()
 
     bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
@@ -70,6 +73,10 @@ def main() -> int:
         )
         code, results = res.unpack()
         print(f"  ← response={code} results={results}")
+
+    if args.hold > 0:
+        print(f"… holding session open for {args.hold}s")
+        time.sleep(args.hold)
 
     # Close the session cleanly.
     print("→ Session.Close")

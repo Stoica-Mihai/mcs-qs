@@ -212,10 +212,35 @@ void ScreenCastImpl::Start(
     quint32& response,
     QVariantMap& results
 ) {
-	qCInfo(logScreenCast) << "Start (skeleton):" << app_id
-	                      << "session=" << session_handle.path();
-	response = 2;
-	results = {};
+	auto* session = ScreenCastSession::find(session_handle.path());
+	if (session == nullptr) {
+		qCWarning(logScreenCast) << "Start: unknown session" << session_handle.path();
+		response = 2;
+		results = {};
+		return;
+	}
+	if (session->selectedSourceIds().isEmpty()) {
+		qCWarning(logScreenCast)
+		    << "Start: SelectSources was not invoked or yielded nothing";
+		response = 2;
+		results = {};
+		return;
+	}
+
+	qCInfo(logScreenCast) << "Start:" << app_id
+	                      << "session=" << session_handle.path()
+	                      << "sources=" << session->selectedSourceIds().size();
+
+	auto* backend = PortalBackend::instance();
+	backend->setDelayedReply(true);
+	if (!session->start(backend->message())) {
+		// session.start() failed synchronously — release the delayed
+		// reply with an error response by re-using the captured message.
+		auto reply = backend->message().createReply();
+		reply.setArguments({QVariant(static_cast<quint32>(2u)),
+		                    QVariant::fromValue(QVariantMap{})});
+		QDBusConnection::sessionBus().send(reply);
+	}
 }
 
 // ── ScreenCastPortal singleton ───────────────────────────────────

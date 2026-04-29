@@ -1,16 +1,24 @@
 #include "screencast_session.hpp"
 
+#include <qcoreapplication.h>
+#include <qdbusargument.h>
 #include <qdbusconnection.h>
 #include <qdbusservicewatcher.h>
+#include <qguiapplication.h>
 #include <qhash.h>
+#include <qlist.h>
 #include <qlogging.h>
 #include <qloggingcategory.h>
 #include <qobject.h>
+#include <qrect.h>
+#include <qscreen.h>
 #include <qstring.h>
 #include <qtimer.h>
+#include <qvariant.h>
 #include <utility>
 
 #include "../../core/logcat.hpp"
+#include "screencast_stream.hpp"
 
 namespace qs::service::portal {
 
@@ -97,6 +105,105 @@ void ScreenCastSession::onCallerLost(const QString& service) {
 	qCInfo(logScSession) << "caller dropped (" << service << "); closing session"
 	                     << this->mSessionHandle.path();
 	this->close();
+}
+
+bool ScreenCastSession::start(QDBusMessage startMessage) {
+	if (this->mSelectedSourceIds.isEmpty()) {
+		qCWarning(logScSession) << "Start called with no selected sources";
+		return false;
+	}
+
+	auto paintCursors = (this->mCursorMode & 0x2u) != 0u; // Embedded
+	auto screens = QGuiApplication::screens();
+
+	for (const auto& id: this->mSelectedSourceIds) {
+		// Source ids in step 6 are "output:<screen-name>". Toplevel ids
+		// land alongside in step 8.
+		if (!id.startsWith(QStringLiteral("output:"))) {
+			qCWarning(logScSession) << "skipping unsupported source id" << id;
+			continue;
+		}
+		auto name = id.mid(7);
+		QScreen* screen = nullptr;
+		for (auto* s: screens) {
+			if (s->name() == name) { screen = s; break; }
+		}
+		if (screen == nullptr) {
+			qCWarning(logScSession) << "selected screen no longer present:" << name;
+			continue;
+		}
+
+		auto* stream = new ScreenCastStream(
+		    ScreenCastStream::SourceKind::Output, screen, paintCursors, this
+		);
+		QObject::connect(stream, &ScreenCastStream::readyForCaller,
+		                 this, &ScreenCastSession::onStreamReady);
+		QObject::connect(stream, &ScreenCastStream::failed,
+		                 this, &ScreenCastSession::onStreamFailed);
+		this->mStreams.append(stream);
+		stream->start();
+	}
+
+	if (this->mStreams.isEmpty()) {
+		qCWarning(logScSession) << "Start: no usable streams could be built";
+		return false;
+	}
+
+	this->mPendingStartReply = std::move(startMessage);
+	this->mStartReplyPending = true;
+	this->mStreamsReady = 0;
+	return true;
+}
+
+void ScreenCastSession::onStreamReady() {
+	this->mStreamsReady++;
+	this->maybeFinishStart();
+}
+
+void ScreenCastSession::maybeFinishStart() {
+	if (!this->mStartReplyPending) return;
+	if (this->mStreamsReady < this->mStreams.size()) return;
+
+	// Build the streams: a(ua{sv}) — one entry per stream.
+	auto bus = QDBusConnection::sessionBus();
+	auto reply = this->mPendingStartReply.createReply();
+	this->mStartReplyPending = false;
+
+	QList<QVariant> streamsList;
+	for (auto* s: this->mStreams) {
+		QVariantMap info;
+		info.insert(QStringLiteral("size"),
+		            QVariant::fromValue(QPoint(s->width(), s->height())));
+		info.insert(QStringLiteral("source_type"),
+		            QVariant::fromValue(static_cast<quint32>(0x1u))); // Monitor
+		QVariant entry;
+		QDBusArgument arg;
+		arg.beginStructure();
+		arg << s->nodeId() << info;
+		arg.endStructure();
+		streamsList.append(QVariant::fromValue(arg));
+	}
+
+	QVariantMap results;
+	results.insert(QStringLiteral("streams"), QVariant::fromValue(streamsList));
+	reply.setArguments({QVariant(static_cast<quint32>(0u)), QVariant::fromValue(results)});
+
+	bus.send(reply);
+	qCInfo(logScSession) << "Start reply sent: " << this->mStreams.size() << "stream(s)";
+}
+
+void ScreenCastSession::onStreamFailed(const QString& reason) {
+	qCWarning(logScSession) << "stream failed:" << reason;
+	this->cancelStartReply(2);
+}
+
+void ScreenCastSession::cancelStartReply(quint32 response) {
+	if (!this->mStartReplyPending) return;
+	this->mStartReplyPending = false;
+	auto bus = QDBusConnection::sessionBus();
+	auto reply = this->mPendingStartReply.createReply();
+	reply.setArguments({QVariant(response), QVariant::fromValue(QVariantMap{})});
+	bus.send(reply);
 }
 
 // ── ScreenCastSessionImpl ─────────────────────────────────────────

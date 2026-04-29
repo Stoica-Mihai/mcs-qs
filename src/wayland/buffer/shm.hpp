@@ -1,8 +1,10 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 
 #include <private/qwaylandshmbackingstore_p.h>
+#include <qimage.h>
 #include <qquickwindow.h>
 #include <qsgtexture.h>
 #include <qsize.h>
@@ -23,6 +25,12 @@ public:
 	[[nodiscard]] QSize size() const override { return this->shmBuffer->size(); }
 	[[nodiscard]] bool isCompatible(const WlBufferRequest& request) const override;
 	[[nodiscard]] WlBufferQSGTexture* createQsgTexture(QQuickWindow* window) const override;
+	/// Direct access to the underlying QImage backing this shm buffer.
+	/// Bytes are mapped from the same shm fd the compositor wrote into,
+	/// so this is the latest captured frame after a screencopy ready
+	/// signal. Used by the ScreenCast portal frame loop.
+	[[nodiscard]] QImage* image() const { return this->shmBuffer->image(); }
+	[[nodiscard]] uint32_t shmFormat() const { return this->format; }
 
 private:
 	WlShmBuffer(QtWaylandClient::QWaylandShmBuffer* shmBuffer, uint32_t format)

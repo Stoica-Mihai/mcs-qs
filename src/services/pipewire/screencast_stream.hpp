@@ -95,6 +95,12 @@ public:
 	[[nodiscard]] quint32 nodeId() const { return this->mNodeId; }
 	[[nodiscard]] bool isReady() const { return this->mReady; }
 
+	/// Push a single frame into the stream. Called from the screencopy
+	/// `frameCaptured` handler when @@testMode is off. `data` is expected
+	/// to be packed BGRA at @@width × @@height with `bytesPerLine` stride;
+	/// step 7 widens this to handle stride/format mismatches and dmabuf.
+	void pushFrame(const uint8_t* data, int bytesPerLine);
+
 signals:
 	void paramsChanged();
 	void enabledChanged();

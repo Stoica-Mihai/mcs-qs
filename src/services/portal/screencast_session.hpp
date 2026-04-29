@@ -2,14 +2,20 @@
 
 #include <qdbusabstractadaptor.h>
 #include <qdbusextratypes.h>
+#include <qdbusmessage.h>
 #include <qdbusservicewatcher.h>
 #include <qhash.h>
+#include <qlist.h>
 #include <qobject.h>
 #include <qstring.h>
 #include <qstringlist.h>
 #include <qtmetamacros.h>
 #include <qtypes.h>
 #include <utility>
+
+namespace qs::service::portal {
+class ScreenCastStream;
+}
 
 namespace qs::service::portal {
 
@@ -43,6 +49,11 @@ public:
 	void setPersistMode(quint32 mode) { this->mPersistMode = mode; }
 	[[nodiscard]] quint32 persistMode() const { return this->mPersistMode; }
 
+	/// Spin up streams for the selected sources and hold the Start
+	/// reply until every stream is ready (or one fails). Returns false
+	/// if the session has nothing to start (no selection).
+	bool start(QDBusMessage startMessage);
+
 	/// Looks up an active session by its registered object path, or nullptr.
 	static ScreenCastSession* find(const QString& sessionHandlePath);
 
@@ -58,8 +69,12 @@ signals:
 
 private slots:
 	void onCallerLost(const QString& service);
+	void onStreamReady();
+	void onStreamFailed(const QString& reason);
 
 private:
+	void maybeFinishStart();
+	void cancelStartReply(quint32 response);
 	QDBusObjectPath mSessionHandle;
 	QString mAppId;
 	QString mSenderUniqueName;
@@ -69,6 +84,10 @@ private:
 	QStringList mSelectedSourceIds;
 	quint32 mCursorMode = 0;
 	quint32 mPersistMode = 0;
+	QList<ScreenCastStream*> mStreams;
+	QDBusMessage mPendingStartReply;
+	bool mStartReplyPending = false;
+	int mStreamsReady = 0;
 
 	/// Map<object-path, ScreenCastSession*>. Used so SelectSources/Start can
 	/// resolve the session by handle, and so Session.Close can find its

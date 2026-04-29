@@ -1,5 +1,6 @@
 #include "screencast_stream.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstring>
@@ -292,6 +293,12 @@ void PwScreenCastStream::handleParamChanged(uint32_t id, const spa_pod* param) {
 }
 
 void PwScreenCastStream::handleProcess() {
+	// PipeWire calls this when the consumer wants a buffer. In test mode
+	// we synthesize one immediately. Outside test mode we leave the
+	// buffer pool alone and let pushFrame() drive things — that runs on
+	// the same thread (Qt main, via the pw_loop QSocketNotifier) so
+	// dequeueing here would race with an external producer.
+	if (!this->mTestMode) return;
 	if (this->mStream == nullptr || this->mNegotiatedStride <= 0) return;
 
 	auto* buffer = pw_stream_dequeue_buffer(this->mStream);
@@ -308,29 +315,57 @@ void PwScreenCastStream::handleProcess() {
 	auto totalBytes = stride * height;
 	if (datum.maxsize < static_cast<uint32_t>(totalBytes)) totalBytes = static_cast<int>(datum.maxsize);
 
-	if (this->mTestMode) {
-		// Pack BGRA little-endian: B, G, R, A. QColor gives us 8-bit
-		// channel values; build a single 32-bit pixel and memset-fill.
-		auto c = this->mTestColor.toRgb();
-		std::array<uint8_t, 4> px = {
-		    static_cast<uint8_t>(c.blue()),
-		    static_cast<uint8_t>(c.green()),
-		    static_cast<uint8_t>(c.red()),
-		    static_cast<uint8_t>(c.alpha()),
-		};
-		auto* dst = static_cast<uint8_t*>(datum.data);
-		auto pixels = totalBytes / 4;
-		for (int i = 0; i < pixels; i++) {
-			std::memcpy(dst + i * 4, px.data(), 4);
-		}
-	} else {
-		// Real frame producer wires here in step 6. For now zero-fill so
-		// the consumer doesn't see uninitialized garbage.
-		std::memset(datum.data, 0, totalBytes);
+	// Pack BGRA little-endian: B, G, R, A. QColor gives us 8-bit channel
+	// values; build a single 32-bit pixel and memset-fill.
+	auto c = this->mTestColor.toRgb();
+	std::array<uint8_t, 4> px = {
+	    static_cast<uint8_t>(c.blue()),
+	    static_cast<uint8_t>(c.green()),
+	    static_cast<uint8_t>(c.red()),
+	    static_cast<uint8_t>(c.alpha()),
+	};
+	auto* dst = static_cast<uint8_t*>(datum.data);
+	auto pixels = totalBytes / 4;
+	for (int i = 0; i < pixels; i++) {
+		std::memcpy(dst + i * 4, px.data(), 4);
 	}
 
 	datum.chunk->offset = 0;
 	datum.chunk->size = static_cast<uint32_t>(totalBytes);
+	datum.chunk->stride = static_cast<int32_t>(stride);
+}
+
+void PwScreenCastStream::pushFrame(const uint8_t* data, int bytesPerLine) {
+	if (this->mStream == nullptr || !this->mReady || this->mNegotiatedStride <= 0) return;
+	if (data == nullptr) return;
+
+	auto* buffer = pw_stream_dequeue_buffer(this->mStream);
+	if (buffer == nullptr) return; // consumer hasn't released a buffer yet — drop
+	auto requeue = qScopeGuard([&, this] { pw_stream_queue_buffer(this->mStream, buffer); });
+
+	auto* spaBuffer = buffer->buffer;
+	if (spaBuffer == nullptr || spaBuffer->n_datas < 1) return;
+	auto& datum = spaBuffer->datas[0]; // NOLINT
+	if (datum.data == nullptr) return;
+
+	auto stride = this->mNegotiatedStride;
+	auto rows = this->mHeight;
+	auto rowBytes = std::min(stride, bytesPerLine);
+	auto* dst = static_cast<uint8_t*>(datum.data);
+
+	if (stride == bytesPerLine) {
+		auto totalBytes = stride * rows;
+		if (datum.maxsize < static_cast<uint32_t>(totalBytes))
+			totalBytes = static_cast<int>(datum.maxsize);
+		std::memcpy(dst, data, totalBytes);
+	} else {
+		for (int y = 0; y < rows; ++y) {
+			std::memcpy(dst + y * stride, data + y * bytesPerLine, rowBytes);
+		}
+	}
+
+	datum.chunk->offset = 0;
+	datum.chunk->size = static_cast<uint32_t>(stride * rows);
 	datum.chunk->stride = static_cast<int32_t>(stride);
 }
 

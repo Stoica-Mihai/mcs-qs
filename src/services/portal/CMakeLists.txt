@@ -3,6 +3,7 @@ qt_add_library(quickshell-service-portal STATIC
 	qml.cpp
 	screencast.cpp
 	screencast_session.cpp
+	screencast_stream.cpp
 	screenshot.cpp
 	wallpaper.cpp
 )
@@ -17,8 +18,20 @@ qs_add_module_deps_light(quickshell-service-portal Quickshell)
 
 install_qml_module(quickshell-service-portal)
 
-target_link_libraries(quickshell-service-portal PRIVATE Qt::Qml Qt::DBus Qt::Gui)
-qs_add_link_dependencies(quickshell-service-portal quickshell-dbus)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(pipewire REQUIRED IMPORTED_TARGET libpipewire-0.3)
+
+target_link_libraries(quickshell-service-portal PRIVATE
+	Qt::Qml Qt::DBus Qt::Gui Qt::Quick
+	Qt::WaylandClientPrivate
+	PkgConfig::pipewire
+)
+qs_add_link_dependencies(quickshell-service-portal
+	quickshell-dbus
+	quickshell-wayland-buffer
+	quickshell-wayland-screencopy
+	quickshell-service-pipewire
+)
 
 target_link_libraries(quickshell PRIVATE quickshell-service-portalplugin)
 
