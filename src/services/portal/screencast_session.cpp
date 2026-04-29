@@ -169,35 +169,33 @@ void ScreenCastSession::maybeFinishStart() {
 	auto reply = this->mPendingStartReply.createReply();
 	this->mStartReplyPending = false;
 
-	QList<QVariant> streamsList;
+	// Build streams as a proper a(ua{sv}) array. We register
+	// QList<ScreenCastStreamEntry> with QtDBus (see header) so the
+	// custom marshaller emits `a(ua{sv})`. QList<QVariant> encodes as
+	// `av` instead and the xdg-desktop-portal frontend rejects the
+	// reply silently, surfacing as NotAllowedError to the caller.
+	QList<ScreenCastStreamEntry> entries;
 	auto multi = this->mStreams.size() > 1;
 	for (qsizetype i = 0; i < this->mStreams.size(); ++i) {
 		auto* s = this->mStreams.at(i);
-		QVariantMap info;
-		info.insert(QStringLiteral("size"),
-		            QVariant::fromValue(QPoint(s->width(), s->height())));
-		info.insert(QStringLiteral("source_type"),
-		            QVariant::fromValue(static_cast<quint32>(0x1u))); // Monitor
+		ScreenCastStreamEntry e;
+		e.nodeId = s->nodeId();
+		e.props.insert(QStringLiteral("size"),
+		               QVariant::fromValue(QPoint(s->width(), s->height())));
+		e.props.insert(QStringLiteral("source_type"),
+		               QVariant::fromValue(static_cast<quint32>(0x1u))); // Monitor
 		// `mapping_id` correlates each stream back to a SelectSources
 		// entry when multiple were requested. xdg-desktop-portal-frontend
 		// uses this for stable per-stream identity (Chrome's display picker
 		// labels each monitor share separately, etc.).
 		if (multi) {
-			info.insert(
-			    QStringLiteral("mapping_id"),
-			    QString::number(i)
-			);
+			e.props.insert(QStringLiteral("mapping_id"), QString::number(i));
 		}
-		QVariant entry;
-		QDBusArgument arg;
-		arg.beginStructure();
-		arg << s->nodeId() << info;
-		arg.endStructure();
-		streamsList.append(QVariant::fromValue(arg));
+		entries.append(e);
 	}
 
 	QVariantMap results;
-	results.insert(QStringLiteral("streams"), QVariant::fromValue(streamsList));
+	results.insert(QStringLiteral("streams"), QVariant::fromValue(entries));
 	reply.setArguments({QVariant(static_cast<quint32>(0u)), QVariant::fromValue(results)});
 
 	bus.send(reply);

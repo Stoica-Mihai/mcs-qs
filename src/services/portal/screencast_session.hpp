@@ -1,21 +1,48 @@
 #pragma once
 
 #include <qdbusabstractadaptor.h>
+#include <qdbusargument.h>
 #include <qdbusextratypes.h>
 #include <qdbusmessage.h>
 #include <qdbusservicewatcher.h>
 #include <qhash.h>
 #include <qlist.h>
+#include <qmetatype.h>
 #include <qobject.h>
 #include <qstring.h>
 #include <qstringlist.h>
 #include <qtmetamacros.h>
 #include <qtypes.h>
+#include <qvariant.h>
 #include <utility>
 
 namespace qs::service::portal {
 class ScreenCastStream;
+
+/// One entry in the `streams: a(ua{sv})` array returned by Start.
+/// Registered with QtDBus so QList<ScreenCastStreamEntry> marshals as
+/// the spec-required signature instead of `av`.
+struct ScreenCastStreamEntry {
+	quint32 nodeId = 0;
+	QVariantMap props;
+};
+inline QDBusArgument& operator<<(QDBusArgument& arg, const ScreenCastStreamEntry& e) {
+	arg.beginStructure();
+	arg << e.nodeId << e.props;
+	arg.endStructure();
+	return arg;
 }
+inline const QDBusArgument& operator>>(const QDBusArgument& arg, ScreenCastStreamEntry& e) {
+	arg.beginStructure();
+	arg >> e.nodeId >> e.props;
+	arg.endStructure();
+	return arg;
+}
+
+} // namespace qs::service::portal
+
+Q_DECLARE_METATYPE(qs::service::portal::ScreenCastStreamEntry)
+Q_DECLARE_METATYPE(QList<qs::service::portal::ScreenCastStreamEntry>)
 
 namespace qs::service::portal {
 

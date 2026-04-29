@@ -1,10 +1,12 @@
 #include "backend.hpp"
 
 #include <qdbusconnection.h>
+#include <qdbusmetatype.h>
 #include <qlogging.h>
 #include <qloggingcategory.h>
 
 #include "../../core/logcat.hpp"
+#include "screencast_session.hpp"
 
 namespace qs::service::portal {
 
@@ -18,6 +20,12 @@ PortalBackend* PortalBackend::instance() {
 }
 
 PortalBackend::PortalBackend(): QObject(nullptr) {
+	// Register custom marshallers for portal reply types. ScreenCast's
+	// `Start` returns `streams: a(ua{sv})` and QtDBus needs the
+	// element type registered to encode it correctly.
+	qDBusRegisterMetaType<ScreenCastStreamEntry>();
+	qDBusRegisterMetaType<QList<ScreenCastStreamEntry>>();
+
 	auto bus = QDBusConnection::sessionBus();
 	if (!bus.isConnected()) {
 		qCWarning(logPortalBackend) << "session bus not connected; portal disabled";
