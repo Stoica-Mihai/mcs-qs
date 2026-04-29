@@ -37,3 +37,7 @@ endif()
 if (SERVICE_LOGIND)
 	add_subdirectory(logind)
 endif()
+
+if (SERVICE_PORTAL)
+	add_subdirectory(portal)
+endif()
