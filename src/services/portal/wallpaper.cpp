@@ -60,14 +60,15 @@ void WallpaperImpl::SetWallpaperURI(
     const QVariantMap& options,
     quint32& /*response*/
 ) {
-	this->setDelayedReply(true);
+	auto* backend = PortalBackend::instance();
+	backend->setDelayedReply(true);
 
 	auto setOn = options.value("set-on").toString();
 	if (setOn.isEmpty()) setOn = "background";
 	auto showPreview = options.value("show-preview").toBool();
 
 	auto* req = new WallpaperPortalRequest(
-	    this->portal, app_id, parent_window, uri, setOn, showPreview, this->message()
+	    this->portal, app_id, parent_window, uri, setOn, showPreview, backend->message()
 	);
 	QObject::connect(
 	    req,

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <qdbuscontext.h>
 #include <qobject.h>
 
 namespace qs::service::portal {
@@ -10,7 +11,13 @@ namespace qs::service::portal {
 /// with the default ExportAdaptors flag, so all interfaces appear at
 /// `/org/freedesktop/portal/desktop` under
 /// `org.freedesktop.impl.portal.desktop.mcshell`.
-class PortalBackend: public QObject {
+///
+/// Inherits QDBusContext so adaptor slots can `parent()->message()` and
+/// `parent()->setDelayedReply(true)` — those calls only work on the
+/// QObject directly registered with the bus, not on adaptors themselves.
+class PortalBackend
+    : public QObject
+    , public QDBusContext {
 	Q_OBJECT;
 
 public:

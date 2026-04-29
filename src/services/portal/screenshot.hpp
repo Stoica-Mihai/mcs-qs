@@ -1,7 +1,6 @@
 #pragma once
 
 #include <qdbusabstractadaptor.h>
-#include <qdbuscontext.h>
 #include <qdbusextratypes.h>
 #include <qdbusmessage.h>
 #include <qobject.h>
@@ -81,9 +80,7 @@ private:
 	void sendResponse(quint32 response, const QString& fileUri);
 };
 
-class ScreenshotImpl
-    : public QDBusAbstractAdaptor
-    , public QDBusContext {
+class ScreenshotImpl: public QDBusAbstractAdaptor {
 	Q_OBJECT;
 	Q_CLASSINFO("D-Bus Interface", "org.freedesktop.impl.portal.Screenshot");
 

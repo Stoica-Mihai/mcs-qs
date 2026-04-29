@@ -70,12 +70,13 @@ void ScreenshotImpl::Screenshot(
     quint32& /*response*/,
     QVariantMap& /*results*/
 ) {
-	this->setDelayedReply(true);
+	auto* backend = PortalBackend::instance();
+	backend->setDelayedReply(true);
 	auto interactive = options.value("interactive").toBool();
 	auto modal = options.value("modal").toBool();
 
 	auto* req = new ScreenshotPortalRequest(
-	    this->portal, app_id, parent_window, interactive, modal, this->message()
+	    this->portal, app_id, parent_window, interactive, modal, backend->message()
 	);
 	QObject::connect(
 	    req,
