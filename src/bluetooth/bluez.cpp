@@ -3,15 +3,20 @@
 #include <qcontainerfwd.h>
 #include <qdbusconnection.h>
 #include <qdbusextratypes.h>
+#include <qdbusmessage.h>
+#include <qdbuspendingcall.h>
+#include <qdbuspendingreply.h>
 #include <qlogging.h>
 #include <qloggingcategory.h>
 #include <qobject.h>
 #include <qtmetamacros.h>
+#include <qvariant.h>
 
 #include "../core/logcat.hpp"
 #include "../dbus/dbus_objectmanager_types.hpp"
 #include "../dbus/objectmanager.hpp"
 #include "adapter.hpp"
+#include "agent.hpp"
 #include "device.hpp"
 
 namespace qs::bluetooth {
@@ -62,6 +67,51 @@ void Bluez::init() {
 		qCDebug(logBluetooth) << "BlueZ is not running. Bluetooth integration will not work.";
 		return;
 	}
+
+	this->registerAgent();
+}
+
+void Bluez::registerAgent() {
+	auto bus = QDBusConnection::systemBus();
+	this->mAgent = new BluetoothAgent(this);
+
+	if (!bus.registerObject(this->mAgent->agentPath(), this->mAgent,
+	                        QDBusConnection::ExportAllSlots
+	                        | QDBusConnection::ExportAllSignals))
+	{
+		qCWarning(logBluetooth) << "Could not register Bluetooth agent at"
+		                        << this->mAgent->agentPath();
+		return;
+	}
+
+	auto pending = bus.asyncCall(QDBusMessage::createMethodCall(
+	    "org.bluez", "/org/bluez", "org.bluez.AgentManager1", "RegisterAgent"
+	) << QVariant::fromValue(QDBusObjectPath(this->mAgent->agentPath()))
+	  << QVariant(QString("KeyboardDisplay")));
+
+	auto* watcher = new QDBusPendingCallWatcher(pending, this);
+	QObject::connect(
+	    watcher,
+	    &QDBusPendingCallWatcher::finished,
+	    this,
+	    [this](QDBusPendingCallWatcher* w) {
+		    QDBusPendingReply<> reply = *w;
+		    if (reply.isError()) {
+			    qCWarning(logBluetooth)
+			        << "AgentManager1.RegisterAgent failed:" << reply.error().message();
+		    } else {
+			    this->mAgent->setRegistered(true);
+			    auto rdef = QDBusConnection::systemBus().asyncCall(
+			        QDBusMessage::createMethodCall(
+			            "org.bluez", "/org/bluez", "org.bluez.AgentManager1", "RequestDefaultAgent"
+			        ) << QVariant::fromValue(QDBusObjectPath(this->mAgent->agentPath()))
+			    );
+			    Q_UNUSED(rdef);
+			    qCInfo(logBluetooth) << "Bluetooth pairing agent registered";
+		    }
+		    w->deleteLater();
+	    }
+	);
 }
 
 void Bluez::onInterfacesAdded(

@@ -18,6 +18,7 @@ qt_add_dbus_interface(DBUS_INTERFACES
 
 qt_add_library(quickshell-bluetooth STATIC
 	adapter.cpp
+	agent.cpp
 	bluez.cpp
 	device.cpp
 	${DBUS_INTERFACES}

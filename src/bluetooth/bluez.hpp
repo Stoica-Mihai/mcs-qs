@@ -16,6 +16,7 @@ namespace qs::bluetooth {
 
 class BluetoothAdapter;
 class BluetoothDevice;
+class BluetoothAgent;
 
 class Bluez: public QObject {
 	Q_OBJECT;
@@ -23,6 +24,7 @@ class Bluez: public QObject {
 public:
 	[[nodiscard]] ObjectModel<BluetoothAdapter>* adapters() { return &this->mAdapters; }
 	[[nodiscard]] ObjectModel<BluetoothDevice>* devices() { return &this->mDevices; }
+	[[nodiscard]] BluetoothAgent* pairingAgent() { return this->mAgent; }
 
 	[[nodiscard]] BluetoothAdapter* adapter(const QString& path) {
 		return this->mAdapterMap.value(path);
@@ -48,6 +50,8 @@ private:
 	QHash<QString, BluetoothDevice*> mDeviceMap;
 	ObjectModel<BluetoothAdapter> mAdapters {this};
 	ObjectModel<BluetoothDevice> mDevices {this};
+	BluetoothAgent* mAgent = nullptr;
+	void registerAgent();
 
 public:
 	Q_OBJECT_BINDABLE_PROPERTY(
@@ -74,6 +78,10 @@ class BluezQml: public QObject {
 	/// A list of all connected bluetooth devices across all adapters.
 	/// See @@BluetoothAdapter.devices for the devices connected to a single adapter.
 	Q_PROPERTY(UntypedObjectModel* devices READ devices CONSTANT);
+	/// BlueZ pairing agent. Listen to its `requestReceived` signal to render
+	/// pin / passkey / confirmation prompts; if no consumer answers, BlueZ
+	/// will time out and reject the pairing.
+	Q_PROPERTY(qs::bluetooth::BluetoothAgent* pairingAgent READ pairingAgent CONSTANT);
 	// clang-format on
 
 signals:
@@ -88,6 +96,10 @@ public:
 
 	[[nodiscard]] static ObjectModel<BluetoothDevice>* devices() {
 		return Bluez::instance()->devices();
+	}
+
+	[[nodiscard]] static BluetoothAgent* pairingAgent() {
+		return Bluez::instance()->pairingAgent();
 	}
 
 	[[nodiscard]] static QBindable<BluetoothAdapter*> bindableDefaultAdapter() {
