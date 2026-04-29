@@ -33,3 +33,7 @@ endif()
 if (SERVICE_SYSINFO)
 	add_subdirectory(sysinfo)
 endif()
+
+if (SERVICE_LOGIND)
+	add_subdirectory(logind)
+endif()
