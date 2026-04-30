@@ -14,11 +14,13 @@
 #include <qscreen.h>
 #include <qstring.h>
 #include <qtypes.h>
+#include <quuid.h>
 #include <qvariant.h>
 
 #include "../../core/logcat.hpp"
 #include "backend.hpp"
 #include "qml.hpp"
+#include "screencast_persist.hpp"
 #include "screencast_session.hpp"
 
 namespace qs::service::portal {
@@ -87,11 +89,22 @@ void ScreenCastPickerRequest::sendResponse(quint32 response) {
 	auto reply = this->mMessage.createReply({QVariant(response), QVariant::fromValue(QVariantMap {})});
 	QDBusConnection::sessionBus().send(reply);
 
-	// Stamp the selection on the owning session so Start() can find it.
+	// Stamp the selection on the owning session so Start() can find it,
+	// and — when the caller asked us to remember the choice — generate
+	// (or reuse) a restore token, persist it, and put it on the session
+	// so Start() can echo it back.
 	if (response == 0) {
 		auto* session = ScreenCastSession::find(this->mSessionHandle);
 		if (session != nullptr) {
 			session->setSelectedSourceIds(this->mSelectedIds);
+			if (this->mPersistMode > 0u && !this->mAppId.isEmpty()) {
+				auto token = session->restoreToken();
+				if (token.isEmpty()) {
+					token = QUuid::createUuid().toString(QUuid::WithoutBraces);
+					session->setRestoreToken(token);
+				}
+				ScreenCastPersist::save(this->mAppId, token, this->mSelectedIds);
+			}
 		}
 	}
 
@@ -156,6 +169,25 @@ void ScreenCastImpl::SelectSources(
 
 	session->setCursorMode(cursorMode);
 	session->setPersistMode(persistMode);
+
+	// Persist short-circuit: if the caller offered a restore_token they
+	// got from a previous approved session, look up the saved selection
+	// and skip the picker entirely. The Start reply will echo the same
+	// token back so the caller knows it's still valid.
+	if (!restoreToken.isEmpty() && persistMode > 0u && !app_id.isEmpty()) {
+		auto saved = ScreenCastPersist::load(app_id, restoreToken);
+		if (!saved.isEmpty()) {
+			session->setSelectedSourceIds(saved);
+			session->setRestoreToken(restoreToken);
+			qCInfo(logScreenCast) << "SelectSources restored token for" << app_id
+			                      << "→" << saved.size() << "source(s), skipping picker";
+			response = 0;
+			results = {};
+			return;
+		}
+		qCInfo(logScreenCast) << "SelectSources: caller offered restore_token but"
+		                      << "no saved entry for" << app_id;
+	}
 
 	// Build the available-sources list. Outputs always go in; window
 	// (toplevel) sources land alongside in step 5 once the picker UI

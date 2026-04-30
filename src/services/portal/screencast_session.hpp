@@ -75,6 +75,8 @@ public:
 	[[nodiscard]] quint32 cursorMode() const { return this->mCursorMode; }
 	void setPersistMode(quint32 mode) { this->mPersistMode = mode; }
 	[[nodiscard]] quint32 persistMode() const { return this->mPersistMode; }
+	void setRestoreToken(QString token) { this->mRestoreToken = std::move(token); }
+	[[nodiscard]] QString restoreToken() const { return this->mRestoreToken; }
 
 	/// Spin up streams for the selected sources and hold the Start
 	/// reply until every stream is ready (or one fails). Returns false
@@ -111,6 +113,7 @@ private:
 	QStringList mSelectedSourceIds;
 	quint32 mCursorMode = 0;
 	quint32 mPersistMode = 0;
+	QString mRestoreToken;
 	QList<ScreenCastStream*> mStreams;
 	QDBusMessage mPendingStartReply;
 	bool mStartReplyPending = false;

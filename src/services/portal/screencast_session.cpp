@@ -196,6 +196,14 @@ void ScreenCastSession::maybeFinishStart() {
 
 	QVariantMap results;
 	results.insert(QStringLiteral("streams"), QVariant::fromValue(entries));
+	// Persist mode echo. Spec: include `persist_mode` (0/1/2) and, when
+	// non-zero, a `restore_token` the caller can store and pass back on
+	// future SelectSources calls to skip the picker.
+	if (this->mPersistMode > 0u && !this->mRestoreToken.isEmpty()) {
+		results.insert(QStringLiteral("persist_mode"),
+		               QVariant::fromValue(this->mPersistMode));
+		results.insert(QStringLiteral("restore_token"), this->mRestoreToken);
+	}
 	reply.setArguments({QVariant(static_cast<quint32>(0u)), QVariant::fromValue(results)});
 
 	bus.send(reply);

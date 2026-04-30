@@ -31,6 +31,10 @@ def main() -> int:
                     help="seconds to keep the session open after Start")
     ap.add_argument("--multi", action="store_true",
                     help="ask for multi-source selection")
+    ap.add_argument("--persist", type=int, default=0, choices=(0, 1, 2),
+                    help="persist_mode: 0=no, 1=running, 2=permanent")
+    ap.add_argument("--restore-token", default="",
+                    help="present a known token to skip the picker")
     args = ap.parse_args()
 
     bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
@@ -55,7 +59,10 @@ def main() -> int:
         "types": GLib.Variant("u", 1),         # Monitor
         "multiple": GLib.Variant("b", args.multi),
         "cursor_mode": GLib.Variant("u", 2),   # Embedded
+        "persist_mode": GLib.Variant("u", args.persist),
     }
+    if args.restore_token:
+        options["restore_token"] = GLib.Variant("s", args.restore_token)
     res = bus.call_sync(
         DEST, ROOT, IFACE, "SelectSources",
         GLib.Variant("(oosa{sv})", (handle, session_handle, "test.app", options)),
