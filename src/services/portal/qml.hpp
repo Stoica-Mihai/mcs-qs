@@ -10,7 +10,6 @@
 
 #include "screencast.hpp"
 #include "screenshot.hpp"
-#include "wallpaper.hpp"
 
 class QScreen;
 namespace qs::wayland::screencopy { class ScreencopyContext; }
@@ -45,28 +44,6 @@ signals:
 private:
 	ScreenshotImpl* impl = nullptr;
 	friend class ScreenshotImpl;
-};
-
-///! xdg-desktop-portal Wallpaper backend.
-///
-/// Implements `org.freedesktop.impl.portal.Wallpaper` so apps can request
-/// wallpaper changes via the portal API. Listen for `wallpaperRequested`
-/// and call approve/cancel/fail on the supplied @@WallpaperPortalRequest
-/// once the change is applied (or the user cancels the preview).
-class WallpaperPortal: public QObject {
-	Q_OBJECT;
-	QML_NAMED_ELEMENT(WallpaperPortal);
-	QML_SINGLETON;
-
-public:
-	explicit WallpaperPortal(QObject* parent = nullptr);
-
-signals:
-	void wallpaperRequested(qs::service::portal::WallpaperPortalRequest* request);
-
-private:
-	WallpaperImpl* impl = nullptr;
-	friend class WallpaperImpl;
 };
 
 ///! xdg-desktop-portal ScreenCast backend.

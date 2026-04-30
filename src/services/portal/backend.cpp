@@ -42,7 +42,7 @@ PortalBackend::PortalBackend(): QObject(nullptr) {
 	// Register the host with the default ExportAdaptors flag so any
 	// QDBusAbstractAdaptor child added to *this* gets exposed
 	// automatically. Adaptors are constructed by the per-interface QML
-	// singletons (ScreenshotPortal, WallpaperPortal, ...) and parented here.
+	// singletons (ScreenshotPortal, ScreenCastPortal, ...) and parented here.
 	if (!bus.registerObject("/org/freedesktop/portal/desktop", this)) {
 		qCWarning(logPortalBackend) << "could not register impl portal object";
 		bus.unregisterService("org.freedesktop.impl.portal.desktop.mcshell");

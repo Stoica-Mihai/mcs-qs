@@ -1,4 +1,4 @@
 [portal]
 DBusName=org.freedesktop.impl.portal.desktop.mcshell
-Interfaces=org.freedesktop.impl.portal.Screenshot;org.freedesktop.impl.portal.Wallpaper;org.freedesktop.impl.portal.ScreenCast
+Interfaces=org.freedesktop.impl.portal.Screenshot;org.freedesktop.impl.portal.ScreenCast
 UseIn=niri
