@@ -1,5 +1,9 @@
 #pragma once
 
+#include <cstddef>
+#include <functional>
+#include <unordered_map>
+
 #include <qobject.h>
 #include <qqmlintegration.h>
 #include <qtmetamacros.h>
@@ -7,6 +11,9 @@
 #include "screencast.hpp"
 #include "screenshot.hpp"
 #include "wallpaper.hpp"
+
+class QScreen;
+namespace qs::wayland::screencopy { class ScreencopyContext; }
 
 namespace qs::service::portal {
 
@@ -79,6 +86,20 @@ class ScreenCastPortal: public QObject {
 public:
 	explicit ScreenCastPortal(QObject* parent = nullptr);
 
+	/// Active instance (the QML singleton). null until QML has loaded
+	/// the type at least once. C++ users (the impl-portal session glue)
+	/// reach for this to share state across sessions.
+	[[nodiscard]] static ScreenCastPortal* instance() { return sInstance; }
+
+	/// Get-or-create a long-lived screencopy context for `screen` with
+	/// the given cursor mode. Cached on the portal so successive
+	/// ScreenCast sessions reusing the same monitor share one underlying
+	/// Wayland capture session — avoids racing the wl_buffer teardown
+	/// when a session ends and a new one starts up shortly after for
+	/// the same screen.
+	[[nodiscard]] qs::wayland::screencopy::ScreencopyContext*
+	getOrCreateScreencopy(QScreen* screen, bool paintCursors);
+
 signals:
 	/// Emitted when an app calls `SelectSources` and we need the user to
 	/// pick what to share. Fill in `selectedSourceIds` on the request,
@@ -86,7 +107,23 @@ signals:
 	void pickerRequested(qs::service::portal::ScreenCastPickerRequest* request);
 
 private:
+	struct CtxKey {
+		QScreen* screen;
+		bool paintCursors;
+		bool operator==(const CtxKey& o) const noexcept {
+			return this->screen == o.screen && this->paintCursors == o.paintCursors;
+		}
+	};
+	struct CtxKeyHash {
+		std::size_t operator()(const CtxKey& k) const noexcept {
+			return std::hash<QScreen*>{}(k.screen) ^ std::hash<bool>{}(k.paintCursors);
+		}
+	};
+
 	ScreenCastImpl* impl = nullptr;
+	std::unordered_map<CtxKey, qs::wayland::screencopy::ScreencopyContext*, CtxKeyHash>
+	    mScreencopyCache;
+	static ScreenCastPortal* sInstance;
 	friend class ScreenCastImpl;
 };
 

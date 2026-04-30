@@ -22,6 +22,7 @@
 #include "../../wayland/buffer/shm.hpp"
 #include "../../wayland/screencopy/manager.hpp"
 #include "../pipewire/screencast_stream.hpp"
+#include "qml.hpp"
 
 namespace qs::service::portal {
 
@@ -52,15 +53,17 @@ void ScreenCastStream::start() {
 		return;
 	}
 
-	// Wrap the QScreen in a QuickshellScreenInfo so ScreencopyManager's
-	// dispatch can recognise it (the manager keys on the QObject type).
-	auto* info = new QuickshellScreenInfo(this, this->mScreen);
-	this->mCapture = wayland::screencopy::ScreencopyManager::createContext(info, this->mPaintCursors);
+	// Borrow a long-lived screencopy context from the portal singleton.
+	// Reusing across sessions for the same screen avoids the wl_buffer
+	// teardown race that would otherwise crash the shell on rapid
+	// session re-creation.
+	this->mCapture = ScreenCastPortal::instance()->getOrCreateScreencopy(
+	    this->mScreen, this->mPaintCursors
+	);
 	if (this->mCapture == nullptr) {
 		emit this->failed(QStringLiteral("no screencopy backend supports this source"));
 		return;
 	}
-	this->mCapture->setParent(this);
 
 	QObject::connect(this->mCapture, &wayland::screencopy::ScreencopyContext::frameCaptured,
 	                 this, &ScreenCastStream::onFrameCaptured);

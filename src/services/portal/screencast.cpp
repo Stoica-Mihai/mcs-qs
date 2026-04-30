@@ -18,6 +18,8 @@
 #include <qvariant.h>
 
 #include "../../core/logcat.hpp"
+#include "../../core/qmlscreen.hpp"
+#include "../../wayland/screencopy/manager.hpp"
 #include "backend.hpp"
 #include "qml.hpp"
 #include "screencast_persist.hpp"
@@ -231,6 +233,8 @@ void ScreenCastImpl::SelectSources(
 	qCInfo(logScreenCast) << "SelectSources picker:" << app_id
 	                      << "types=" << sourceTypes
 	                      << "multiple=" << multiple
+	                      << "persist=" << persistMode
+	                      << "tokenLen=" << restoreToken.size()
 	                      << "sources=" << sources.size();
 	emit this->portal->pickerRequested(req);
 }
@@ -277,8 +281,28 @@ void ScreenCastImpl::Start(
 
 // ── ScreenCastPortal singleton ───────────────────────────────────
 
+ScreenCastPortal* ScreenCastPortal::sInstance = nullptr;
+
 ScreenCastPortal::ScreenCastPortal(QObject* parent): QObject(parent) {
 	this->impl = new ScreenCastImpl(PortalBackend::instance(), this);
+	sInstance = this;
+}
+
+qs::wayland::screencopy::ScreencopyContext*
+ScreenCastPortal::getOrCreateScreencopy(QScreen* screen, bool paintCursors) {
+	if (screen == nullptr) return nullptr;
+	auto key = CtxKey{screen, paintCursors};
+	auto it = this->mScreencopyCache.find(key);
+	if (it != this->mScreencopyCache.end() && it->second != nullptr) {
+		return it->second;
+	}
+
+	auto* info = new QuickshellScreenInfo(this, screen);
+	auto* ctx = wayland::screencopy::ScreencopyManager::createContext(info, paintCursors);
+	if (ctx == nullptr) return nullptr;
+	ctx->setParent(this); // owned by the singleton, lives for shell lifetime
+	this->mScreencopyCache[key] = ctx;
+	return ctx;
 }
 
 } // namespace qs::service::portal
