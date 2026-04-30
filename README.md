@@ -13,6 +13,12 @@ mcs-qs extends Quickshell with additional features and patches, including:
 - IPC with optional arguments
 - Inverted corner support for regions
 - `Quickshell.Services.SysInfo` — native system monitoring (CPU, memory, temps, network, disk I/O, GPU). GPU metrics cover AMD via sysfs, NVIDIA via dlopened libnvidia-ml.so.1 (graceful fallback when absent), and Intel clock. Zero subprocess polling.
+- xdg-desktop-portal Screenshot and ScreenCast backends — apps go through `org.freedesktop.impl.portal.Screenshot` and `org.freedesktop.impl.portal.ScreenCast` for native screenshots and screen-share, with the picker UI and persist-token storage owned by the shell. Drop-in replacement for `xdg-desktop-portal-wlr`.
+- `Quickshell.Services.PipeWire.PwScreenCastStream` — publish a video source as a PipeWire `Video/Source` node so any consumer (browser, OBS, GStreamer) can receive frames. Used internally by the ScreenCast portal but exposed as a generic building block.
+- `DBusIpcHandler` — declaratively publish QML functions, signals, and properties over a private D-Bus surface; takes the place of ad-hoc `mcs-qs ipc call` shell-outs and lets external clients drive the shell with type-safe contracts.
+- Native logind (`org.freedesktop.login1`) and BlueZ pairing-agent bindings — replaces `loginctl`/`bluetoothctl` shell-outs with reactive D-Bus services.
+- `Pipewire.setForceRate()` — native sample-rate override via the global PipeWire metadata, no `pw-metadata` shell-out.
+- `HttpFetcher` — reusable async HTTP/JSON fetcher; replaces `curl` shell-outs for weather, holidays, and similar polled data.
 
 The binary is named `mcs-qs` and is a drop-in replacement for `quickshell`.
 
