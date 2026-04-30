@@ -302,6 +302,24 @@ ScreenCastPortal::getOrCreateScreencopy(QScreen* screen, bool paintCursors) {
 	if (ctx == nullptr) return nullptr;
 	ctx->setParent(this); // owned by the singleton, lives for shell lifetime
 	this->mScreencopyCache[key] = ctx;
+
+	// When the screen is hot-unplugged, evict the cache entry. Use
+	// deleteLater() so the destruction happens at the next event-loop
+	// iteration — by then libwayland has dispatched any in-flight events
+	// for the screencopy proxies (listener data still valid during
+	// dispatch), and the compositor itself has lost the screen so no
+	// further events will be sent. This avoids the wl_proxy-destroyed-
+	// during-pending-event race that QtWaylandClient's generated destroy()
+	// doesn't guard against (it doesn't detach the listener before sending
+	// the destroy request).
+	QObject::connect(screen, &QObject::destroyed, this, [this, key, ctx]() {
+		auto it = this->mScreencopyCache.find(key);
+		if (it != this->mScreencopyCache.end() && it->second == ctx) {
+			this->mScreencopyCache.erase(it);
+		}
+		ctx->deleteLater();
+	});
+
 	return ctx;
 }
 
