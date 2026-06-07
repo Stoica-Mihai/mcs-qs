@@ -128,6 +128,7 @@ void ScreencopyView::onFrameCaptured() {
 
 	this->bSourceSize = size;
 	this->bHasContent = true;
+	emit this->frameReady();
 }
 
 void ScreencopyView::componentComplete() {

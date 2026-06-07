@@ -66,6 +66,12 @@ signals:
 	/// The compositor has ended the video stream. Attempting to restart it may or may not work.
 	void stopped();
 
+	/// Emitted each time a freshly captured frame has been presented. Unlike
+	/// @@hasContent (which latches true on the first frame), this fires on
+	/// every frame, so a one-shot capture can grab exactly when the new frame
+	/// lands instead of guessing with a timer.
+	void frameReady();
+
 	void captureSourceChanged();
 	void paintCursorsChanged();
 	void liveChanged();
