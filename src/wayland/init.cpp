@@ -10,9 +10,10 @@
 #include "wlr_layershell/wlr_layershell.hpp"
 #endif
 
-void installWlProxySafeDeref(); // NOLINT(misc-use-internal-linkage)
-void installPlatformMenuHook(); // NOLINT(misc-use-internal-linkage)
-void installPopupPositioner();  // NOLINT(misc-use-internal-linkage)
+void installWlProxySafeDeref();      // NOLINT(misc-use-internal-linkage)
+void installWlRegistryScreenGuard(); // NOLINT(misc-use-internal-linkage)
+void installPlatformMenuHook();      // NOLINT(misc-use-internal-linkage)
+void installPopupPositioner();       // NOLINT(misc-use-internal-linkage)
 
 namespace {
 
@@ -33,7 +34,10 @@ class WaylandPlugin: public QsEnginePlugin {
 		return isWayland;
 	}
 
-	void preinit() override { installWlProxySafeDeref(); }
+	void preinit() override {
+		installWlProxySafeDeref();
+		installWlRegistryScreenGuard();
+	}
 
 	void init() override {
 		installPlatformMenuHook();
